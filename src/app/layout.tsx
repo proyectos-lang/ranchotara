@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Fira_Code } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppSidebar } from "@/components/layout/AppSidebar";
+import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -34,9 +35,10 @@ export default function RootLayout({
       <body className="flex h-screen overflow-hidden">
         <TooltipProvider>
           <AppSidebar />
-          <main className="flex-1 overflow-auto min-w-0">
+          <main className="flex-1 overflow-auto min-w-0 pb-16 md:pb-0">
             {children}
           </main>
+          <MobileBottomNav />
         </TooltipProvider>
       </body>
     </html>

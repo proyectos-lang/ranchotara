@@ -260,45 +260,53 @@ ALTER PUBLICATION supabase_realtime ADD TABLE ranchotara.pedidos;
 ### Alcance
 - Módulo de administración en `/admin/reporteria` con dos pestañas independientes
 
-**Pestaña 1 — Detalle de Ventas**
+**Pestaña 1 — Resumen de Ventas**
 - Fetch de `pedidos` (estado=pagado) con join nested a `mesas`, `detalles_pedido`, `productos`
 - Aplanado cliente-side a líneas individuales (`VentaLinea[]`) — una fila por ítem de pedido
-- Filtros: rango de fechas (re-fetch), artículo (dropdown, populated dinámicamente), bloque horario (Mañana 06-11h / Mediodía 12-14h / Tarde 15-17h / Noche 18-23h)
-- Tabla scrollable (`max-h-[600px]`), cabeceras sticky, filas alternas
-- Barra de resumen: total de líneas, unidades vendidas, importe total en L.
+- **Date picker**: Popover + Calendar (shadcn/ui) para rango Desde/Hasta — refetch al cambiar
+- **Filtros cliente**: artículo (dropdown populated dinámicamente desde datos), bloque horario (Todo el día / Mañana / Mediodía / Tarde / Noche)
+- Tabla: `max-h-[550px] overflow-y-auto`, cabeceras `sticky top-0 bg-white z-10 shadow-sm`, filas `even:bg-slate-50/50`
+- Columnas: Fecha (DD/MM/AAAA), Hora (HH:MM), Mesa, Artículo, Cant., Total (L.)
+- Barra de resumen: líneas, unidades vendidas, total en L.
+- Estado vacío elegante con ícono 🔍
 
-**Pestaña 2 — Tiempos de Cocina**
-- Fetch en dos pasos: pedido IDs en rango → detalles con `estado_cocina='entregado'` y `hora_listo NOT NULL`
-- Columnas: Pedido #, Mesa, Plato, Hora Pedido (`fecha_creacion`), Hora Lista (`hora_listo`), Tiempo Total
-- Tiempo calculado como `hora_listo − fecha_creacion` en minutos
-- Alerta visual: filas con tiempo > 25 min en `bg-red-50` con texto rojo y símbolo ⚠
-- KPIs: platos entregados, tiempo promedio, contador de alertas
-- Filtros: rango de fechas (re-fetch), mesa (dropdown)
-- Leyenda inferior cuando hay filas en alerta
+**Pestaña 2 — Control de Tiempos**
+- Fetch en dos pasos: pedido IDs en rango → `detalles_pedido` con `estado_cocina='entregado'`
+- Columnas: ID Pedido, Mesa, Plato/Bebida, Hora Pedido (HH:MM:SS), Inicio Cocina (`hora_inicio_preparacion`), Hora Entrega (`hora_entregado`), Tiempo Total
+- Tiempo Total = `hora_entregado − fecha_creacion` formateado como "X min Ys"
+- **Alerta visual**: filas con tiempo > 25 min → `bg-rose-50/70` + Badge "Retrasado" (rose)
+- KPIs: platos entregados, tiempo promedio, contador de alertas (tarjeta rose si > 0)
+- Filtros: rango de fechas (Popover/Calendar, re-fetch) + mesa (dropdown)
+- Leyenda inferior cuando hay filas retrasadas
+- Estado vacío elegante con ícono 🔍
 
 ### Lógica de datos
-- `hora_listo` en `detalles_pedido` es el proxy disponible para tiempo de preparación (no existe `hora_entregado` en el esquema actual)
-- Tiempo Total = `hora_listo − pedidos.fecha_creacion` → mide desde apertura del pedido hasta marcado como listo
-- Para datos más granulares en el futuro: añadir `hora_inicio_preparacion` y `hora_entregado` en `detalles_pedido`
+- `hora_inicio_preparacion` y `hora_entregado` en `detalles_pedido` son campos opcionales — si son `null` la celda muestra "—" y el Tiempo Total no se calcula
+- Tiempo Total = `hora_entregado − pedidos.fecha_creacion` → tiempo total desde apertura hasta entrega al cliente
 
-### SQL recomendado para métricas futuras
+### SQL necesario en Supabase (ejecutar antes de usar Pestaña 2)
 ```sql
--- Campos opcionales para mayor granularidad de tiempos:
 ALTER TABLE ranchotara.detalles_pedido ADD COLUMN IF NOT EXISTS hora_inicio_preparacion TIMESTAMPTZ;
 ALTER TABLE ranchotara.detalles_pedido ADD COLUMN IF NOT EXISTS hora_entregado TIMESTAMPTZ;
--- Actualizar hora_entregado cuando estado_cocina cambie a 'entregado' (via trigger o en app):
--- UPDATE ranchotara.detalles_pedido SET hora_entregado = NOW() WHERE id = $1;
+
+-- Trigger recomendado: registrar hora_inicio_preparacion al cambiar a 'en_preparacion'
+-- y hora_entregado al cambiar a 'entregado' (puede hacerse también desde la app en MonitorCocina.tsx)
 ```
 
-### Archivos creados
-- `src/components/reporteria/TabVentas.tsx` — pestaña Detalle de Ventas
-- `src/components/reporteria/TabTiempos.tsx` — pestaña Tiempos de Cocina con alertas
-- `src/components/reporteria/ReporteriaManager.tsx` — orquestador con shadcn/ui Tabs
+### Nuevas dependencias instaladas
+- `src/components/ui/calendar.tsx` — shadcn Calendar (usa `react-day-picker`)
+- `src/components/ui/popover.tsx` — shadcn Popover (usa `@base-ui/react/popover`)
+- `date-fns` v4 — ya estaba en el proyecto, usado para `format(date, "dd/MM/yyyy")`
+
+### Archivos creados / actualizados
+- `src/components/reporteria/TabVentas.tsx` — Resumen de Ventas con Popover/Calendar
+- `src/components/reporteria/TabTiempos.tsx` — Control de Tiempos con alertas "Retrasado"
+- `src/components/reporteria/ReporteriaManager.tsx` — orquestador con shadcn/ui Tabs (`data-active:`)
 - `src/app/admin/reporteria/page.tsx` — ruta `/admin/reporteria`
-- `src/components/layout/AppSidebar.tsx` — añadido enlace "Reportería" con icono `ClipboardList` en sección Administración
+- `src/components/layout/AppSidebar.tsx` — enlace "Reportería" con icono `ClipboardList`
 
 ### Rutas Next.js
-- `/admin/reporteria` — módulo de reportería (pestañas: Ventas / Tiempos)
+- `/admin/reporteria` — módulo de reportería (pestañas: Resumen de Ventas / Control de Tiempos)
 
 ---
 
@@ -361,6 +369,51 @@ src/
 - Imágenes: Supabase Storage, bucket `menu-images`
 - Todos los componentes en español
 - shadcn/ui como base de UI; extender con clases Tailwind de la paleta
+- **Mobile-First**: clases base para móvil, `md:` y `lg:` para escritorio
+
+---
+
+## Soporte Mobile-First
+**Estado: ✅ Implementado**
+
+La aplicación cuenta con soporte completo para dispositivos móviles manteniendo la paleta "Minimalismo Botánico".
+
+### Navegación
+| Dispositivo | Navegación |
+|-------------|-----------|
+| Móvil (`< md`) | `MobileBottomNav` — barra inferior fija con gradiente oscuro, 5 atajos: Inicio · Mesas · Cocina · Caja · Reportes |
+| Desktop (`≥ md`) | `AppSidebar` — barra lateral expandible/colapsable |
+- Archivos: `src/components/layout/MobileBottomNav.tsx`, `src/components/layout/AppSidebar.tsx`
+- El POS (`/pedidos/*`) oculta la bottom nav automáticamente (tiene su propia barra)
+
+### POS / Toma de Pedidos
+- Catálogo: `grid-cols-2` en móvil, `sm:grid-cols-3 lg:grid-cols-4` en desktop
+- Carrito: Sheet desde abajo (`side="bottom"`, `h-[88vh]`, `rounded-t-2xl`) — se activa con el botón "Comandar" de la barra inferior
+- Barra "Comandar": `fixed bottom-0 w-full`, siempre visible, muestra total
+
+### Monitor de Cocina
+- Grid: `grid-cols-1` en móvil, `md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`
+- Botones de ítem (Marcar Listo / Entregar): `w-full` en móvil, `sm:w-auto` en desktop
+- Layout de ítem: `flex-col` en móvil, `sm:flex-row` en desktop
+- Área táctil mínima: `min-h-[44px]`
+
+### Tablas (Módulo 1, 6, 7)
+- Todas las tablas envueltas en `overflow-x-auto` para swipe horizontal táctil
+- `min-w-[400px]` en tablas para mantener legibilidad
+
+### Reportería (Módulo 7)
+- Filtros en móvil: ocultos detrás de botón "Filtros" + Sheet desde abajo
+- Indicador visual (punto verde) cuando hay filtros activos
+- Filtros en desktop: grid inline como antes
+
+### KPIs y Cards
+- `SeccionHoy` (Analítica): `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` (ya tenía esto)
+- `TabTiempos`: 3 KPIs en `grid-cols-3` — se mantienen por ser cortos
+
+### Usabilidad Táctil
+- Inputs y Selects: `h-9` base, `h-11` en drawers móviles
+- Botones de acción: todos con `min-h-[44px]` o mayor
+- Texto mínimo: `text-sm` en todos los inputs (evita zoom en iOS/Android)
 
 ---
 
@@ -368,7 +421,8 @@ src/
 
 | Fecha | Cambio |
 |-------|--------|
-| 2026-05-27 | **Módulo 7 completado.** Reportería `/admin/reporteria` — Pestaña "Detalle de Ventas" (filtros fecha+artículo+horario, tabla scrollable, resumen L.) y Pestaña "Tiempos de Cocina" (alertas >25 min en rojo, KPIs promedio+alertas, filtros fecha+mesa). Enlace "Reportería" añadido al sidebar con icono `ClipboardList`. |
+| 2026-05-27 | **Refactorización Mobile-First completa.** Bottom Navigation Bar en móvil (`MobileBottomNav.tsx`) con gradiente del sidebar. Sidebar lateral oculto en móvil (`hidden md:flex`). POS: Sheet del carrito desde abajo (`side="bottom"`, `h-[88vh]`). Cocina: botones de acción `w-full` en móvil, layout ítem en columna. Módulo 7 (Reportería): filtros ocultos detrás de botón "Filtros" + Sheet en móvil. Tablas envueltas en `overflow-x-auto`: Productos y Analítica. KPIs de Analítica apilados en móvil. Padding `p-4 md:p-8` en módulos admin. Área táctil mínima `min-h-[44px]` garantizada en botones críticos. |
+| 2026-05-27 | **Módulo 7 completado (v2).** Reportería `/admin/reporteria` rediseñada. Pestaña 1 "Resumen de Ventas": date picker Popover+Calendar, filtro artículo+horario, tabla sticky headers `max-h-[550px]`. Pestaña 2 "Control de Tiempos": columnas `hora_inicio_preparacion`+`hora_entregado`, Badge "Retrasado" (rose) para >25 min, KPIs promedio+alertas. Instalados `calendar.tsx` y `popover.tsx` de shadcn. |
 | 2026-05-27 | **KDS mejorado.** Badges shadcn/ui en dos niveles (comanda + ítem): amber=en cola, azul=cocinando, emerald=listo, slate=entregado. Monitor dividido en secciones "En Cola" / "Cocinando" con contadores en tiempo real. Documentados campos de tiempo exacto (`fecha_creacion`, `hora_listo`, `fecha_pago`) y métricas derivables para analítica futura. |
 | 2026-05-27 | **Pedido en Barra.** Ruta `/pedidos/barra` — POS sin mesa asociada (`mesa_id = null`). Toast de confirmación al enviar, reseteo automático del carrito para pedidos consecutivos. Acceso desde sidebar y botón en Panel de Mesas. |
 | 2026-05-26 | Setup inicial: Next.js 16, Tailwind v4, shadcn/ui v4.7, Supabase client, PLAN.MD |

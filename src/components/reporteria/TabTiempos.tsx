@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
+import { CalendarIcon, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -12,13 +13,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 /* ── Tipos ──────────────────────────────────────────────────────── */
 type RawDetalle = {
   id: number;
-  hora_listo: string | null;
-  cantidad: number;
   estado_cocina: string;
+  hora_inicio_preparacion: string | null;
+  hora_entregado: string | null;
   productos: { nombre: string } | null;
   pedidos: {
     id: number;
@@ -33,8 +42,9 @@ type TiempoLinea = {
   mesa: string;
   plato: string;
   hora_pedido: Date | null;
-  hora_lista: Date | null;
-  minutos: number | null;
+  inicio_cocina: Date | null;
+  hora_entrega: Date | null;
+  segundos: number | null;
 };
 
 /* ── Helpers ────────────────────────────────────────────────────── */
@@ -45,57 +55,104 @@ const hace30 = () => {
   return d.toISOString().slice(0, 10);
 };
 
-const fmtHora = (d: Date | null) =>
-  d ? d.toLocaleTimeString("es-HN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
+const fmtHMS = (d: Date | null) =>
+  d
+    ? d.toLocaleTimeString("es-HN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "—";
 
-function calcMinutos(desde: Date | null, hasta: Date | null): number | null {
+function calcSegundos(desde: Date | null, hasta: Date | null): number | null {
   if (!desde || !hasta) return null;
-  return Math.round((hasta.getTime() - desde.getTime()) / 60_000);
+  const s = Math.round((hasta.getTime() - desde.getTime()) / 1000);
+  return s < 0 ? null : s;
 }
 
-function fmtTiempo(min: number | null): string {
-  if (min === null) return "—";
-  if (min < 1) return "< 1 min";
-  if (min < 60) return `${min} min`;
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+function fmtTiempo(seg: number | null): string {
+  if (seg === null) return "—";
+  const min = Math.floor(seg / 60);
+  const s   = seg % 60;
+  if (min === 0) return `${s}s`;
+  return s === 0 ? `${min} min` : `${min} min ${s}s`;
 }
 
-/* ── Componente ─────────────────────────────────────────────────── */
+/* ── Date picker reutilizable ───────────────────────────────────── */
+function DateField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: Date | undefined;
+  onChange: (d: Date | undefined) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+        {label}
+      </Label>
+      <Popover>
+        <PopoverTrigger
+          render={<button type="button" />}
+          className="inline-flex items-center justify-start gap-2 h-9 w-full px-3 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+        >
+          <CalendarIcon className="w-4 h-4 text-slate-400 shrink-0" />
+          <span className={value ? "text-slate-800" : "text-slate-400"}>
+            {value ? format(value, "dd/MM/yyyy") : "Seleccionar fecha"}
+          </span>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0">
+          <Calendar mode="single" selected={value} onSelect={onChange} />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+/* ── Componente principal ───────────────────────────────────────── */
 export function TabTiempos() {
   const [lineas, setLineas]     = useState<TiempoLinea[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
-  const [dateFrom, setDateFrom] = useState(hace30);
-  const [dateTo, setDateTo]     = useState(hoy);
-  const [mesaFiltro, setMesaFiltro] = useState("todas");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d;
+  });
+  const [dateTo, setDateTo]     = useState<Date | undefined>(() => new Date());
+  const [mesaFiltro, setMesaFiltro]   = useState("todas");
+  const [showFiltros, setShowFiltros] = useState(false);
 
-  /* ── Fetch ── */
+  /* ── Fetch en dos pasos ── */
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    /* Paso 1: obtener IDs de pedidos en el rango */
+    const fromStr = dateFrom ? format(dateFrom, "yyyy-MM-dd") : hace30();
+    const toStr   = dateTo   ? format(dateTo,   "yyyy-MM-dd") : hoy();
+
+    /* Paso 1: IDs de pedidos en el rango */
     const { data: pedidoIds, error: err1 } = await supabase
       .from("pedidos")
       .select("id")
-      .gte("fecha_creacion", `${dateFrom}T00:00:00`)
-      .lte("fecha_creacion", `${dateTo}T23:59:59`);
+      .gte("fecha_creacion", `${fromStr}T00:00:00`)
+      .lte("fecha_creacion", `${toStr}T23:59:59`);
 
     if (err1) { setError(err1.message); setLoading(false); return; }
 
     const ids = (pedidoIds ?? []).map((p: { id: number }) => p.id);
     if (ids.length === 0) { setLineas([]); setLoading(false); return; }
 
-    /* Paso 2: detalles entregados con hora_listo, anidando pedido y mesa */
+    /* Paso 2: detalles entregados con campos de tiempo */
     const { data, error: err2 } = await supabase
       .from("detalles_pedido")
       .select(`
         id,
-        hora_listo,
-        cantidad,
         estado_cocina,
+        hora_inicio_preparacion,
+        hora_entregado,
         productos ( nombre ),
         pedidos (
           id,
@@ -105,22 +162,23 @@ export function TabTiempos() {
       `)
       .in("pedido_id", ids)
       .eq("estado_cocina", "entregado")
-      .not("hora_listo", "is", null)
-      .order("hora_listo", { ascending: false });
+      .order("hora_entregado", { ascending: false });
 
     if (err2) { setError(err2.message); setLoading(false); return; }
 
     const flat: TiempoLinea[] = ((data ?? []) as unknown as RawDetalle[]).map((d) => {
-      const horaPedido = d.pedidos?.fecha_creacion ? new Date(d.pedidos.fecha_creacion) : null;
-      const horaLista  = d.hora_listo ? new Date(d.hora_listo) : null;
+      const horaPedido   = d.pedidos?.fecha_creacion     ? new Date(d.pedidos.fecha_creacion)     : null;
+      const inicioCocina = d.hora_inicio_preparacion     ? new Date(d.hora_inicio_preparacion)    : null;
+      const horaEntrega  = d.hora_entregado              ? new Date(d.hora_entregado)             : null;
       return {
-        detalle_id: d.id,
-        pedido_id:  d.pedidos?.id ?? 0,
-        mesa:       d.pedidos?.mesas?.numero_mesa ?? "Barra",
-        plato:      d.productos?.nombre ?? "—",
-        hora_pedido: horaPedido,
-        hora_lista:  horaLista,
-        minutos:    calcMinutos(horaPedido, horaLista),
+        detalle_id:   d.id,
+        pedido_id:    d.pedidos?.id ?? 0,
+        mesa:         d.pedidos?.mesas?.numero_mesa ?? "Barra",
+        plato:        d.productos?.nombre ?? "—",
+        hora_pedido:  horaPedido,
+        inicio_cocina: inicioCocina,
+        hora_entrega: horaEntrega,
+        segundos:     calcSegundos(horaPedido, horaEntrega),
       };
     });
 
@@ -130,7 +188,7 @@ export function TabTiempos() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  /* ── Mesas únicas ── */
+  /* ── Mesas únicas para dropdown ── */
   const mesas = useMemo(() => {
     const set = new Set(lineas.map((l) => l.mesa));
     return Array.from(set).sort();
@@ -141,40 +199,75 @@ export function TabTiempos() {
     lineas.filter((l) => mesaFiltro === "todas" || l.mesa === mesaFiltro),
   [lineas, mesaFiltro]);
 
-  /* ── Estadísticas ── */
-  const { promedio, maxMinutos, alertas } = useMemo(() => {
-    const conTiempo = filtradas.filter((l) => l.minutos !== null);
-    const sum = conTiempo.reduce((s, l) => s + (l.minutos ?? 0), 0);
-    const max = conTiempo.reduce((m, l) => Math.max(m, l.minutos ?? 0), 0);
+  /* ── KPIs ── */
+  const { promedio, alertas } = useMemo(() => {
+    const conTiempo = filtradas.filter((l) => l.segundos !== null);
+    const sum = conTiempo.reduce((s, l) => s + (l.segundos ?? 0), 0);
     return {
-      promedio:   conTiempo.length ? Math.round(sum / conTiempo.length) : null,
-      maxMinutos: conTiempo.length ? max : null,
-      alertas:    conTiempo.filter((l) => (l.minutos ?? 0) > 25).length,
+      promedio: conTiempo.length ? Math.round(sum / conTiempo.length) : null,
+      alertas:  conTiempo.filter((l) => (l.segundos ?? 0) > 25 * 60).length,
     };
   }, [filtradas]);
 
   return (
     <div className="space-y-4">
-      {/* ── Filtros ── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
-        <div className="space-y-1.5">
-          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Desde</Label>
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="h-9 text-sm bg-slate-50 border-slate-200 focus-visible:ring-emerald-500"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Hasta</Label>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="h-9 text-sm bg-slate-50 border-slate-200 focus-visible:ring-emerald-500"
-          />
-        </div>
+      {/* ── Filtros: botón en móvil / grid en desktop ── */}
+      <div className="flex items-center justify-between md:hidden">
+        <p className="text-xs text-slate-500">
+          <span className="font-semibold text-slate-700">{filtradas.length}</span> registros
+        </p>
+        <button
+          onClick={() => setShowFiltros(true)}
+          className="inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm"
+        >
+          <SlidersHorizontal className="w-4 h-4 text-slate-500" />
+          Filtros
+          {mesaFiltro !== "todas" && (
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          )}
+        </button>
+      </div>
+
+      {/* Drawer de filtros (móvil) */}
+      <Sheet open={showFiltros} onOpenChange={setShowFiltros}>
+        <SheetContent side="bottom" className="rounded-t-2xl p-0">
+          <SheetHeader className="px-5 pt-5 pb-3 border-b border-slate-100">
+            <SheetTitle className="text-base font-bold text-slate-800">Filtros</SheetTitle>
+          </SheetHeader>
+          <div className="p-5 space-y-4">
+            <DateField label="Desde" value={dateFrom} onChange={setDateFrom} />
+            <DateField label="Hasta" value={dateTo}   onChange={setDateTo}   />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Mesa</Label>
+              <Select value={mesaFiltro} onValueChange={(v) => setMesaFiltro(v ?? "todas")}>
+                <SelectTrigger className="h-11 text-sm bg-slate-50 border-slate-200 w-full">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas las mesas</SelectItem>
+                  {mesas.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {m === "Barra" ? "Barra" : `Mesa ${m}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <button
+              onClick={() => setShowFiltros(false)}
+              className="w-full min-h-[48px] rounded-xl bg-emerald-500 text-white font-semibold text-sm hover:bg-emerald-600 transition-colors"
+            >
+              Aplicar filtros
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Grid de filtros (desktop) */}
+      <div className="hidden md:grid grid-cols-3 gap-3 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+        <DateField label="Desde" value={dateFrom} onChange={setDateFrom} />
+        <DateField label="Hasta" value={dateTo}   onChange={setDateTo}   />
+
         <div className="space-y-1.5">
           <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Mesa</Label>
           <Select value={mesaFiltro} onValueChange={(v) => setMesaFiltro(v ?? "todas")}>
@@ -183,7 +276,11 @@ export function TabTiempos() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todas">Todas las mesas</SelectItem>
-              {mesas.map((m) => <SelectItem key={m} value={m}>{m === "Barra" ? "Barra" : `Mesa ${m}`}</SelectItem>)}
+              {mesas.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m === "Barra" ? "Barra" : `Mesa ${m}`}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -202,10 +299,10 @@ export function TabTiempos() {
           </div>
           <div className={[
             "rounded-xl border shadow-sm px-4 py-3 text-center",
-            alertas > 0 ? "bg-red-50 border-red-200" : "bg-white border-slate-200",
+            alertas > 0 ? "bg-rose-50 border-rose-200" : "bg-white border-slate-200",
           ].join(" ")}>
             <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Alertas &gt; 25 min</p>
-            <p className={["text-xl font-bold", alertas > 0 ? "text-red-600" : "text-slate-800"].join(" ")}>
+            <p className={["text-xl font-bold", alertas > 0 ? "text-rose-600" : "text-slate-800"].join(" ")}>
               {alertas}
             </p>
           </div>
@@ -215,7 +312,7 @@ export function TabTiempos() {
       {/* ── Tabla ── */}
       {loading ? (
         <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: 7 }).map((_, i) => (
             <Skeleton key={i} className="h-10 w-full rounded-lg" />
           ))}
         </div>
@@ -223,35 +320,37 @@ export function TabTiempos() {
         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
       ) : (
         <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-          <div className="max-h-[560px] overflow-y-auto">
+          <div className="max-h-[550px] overflow-y-auto">
             <table className="w-full text-sm text-slate-800 border-collapse">
               <thead>
-                <tr className="sticky top-0 bg-white z-10 shadow-sm">
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">#</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">Mesa</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">Plato</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">Hora Pedido</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">Hora Lista</th>
-                  <th className="text-right px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">Tiempo Total</th>
+                <tr className="sticky top-0 bg-white z-10 shadow-sm border-b border-slate-100">
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">ID Pedido</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Mesa</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Plato / Bebida</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Hora Pedido</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Inicio Cocina</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Hora Entrega</th>
+                  <th className="text-right px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tiempo Total</th>
                 </tr>
               </thead>
               <tbody>
                 {filtradas.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-16 text-slate-400 text-sm">
-                      Sin registros de platos entregados en el período seleccionado
+                    <td colSpan={7} className="text-center py-16 text-slate-400 text-sm">
+                      <p className="text-3xl mb-3">🔍</p>
+                      No se encontraron registros para los filtros seleccionados
                     </td>
                   </tr>
                 ) : (
                   filtradas.map((l, i) => {
-                    const alerta = (l.minutos ?? 0) > 25;
+                    const retrasado = (l.segundos ?? 0) > 25 * 60;
                     return (
                       <tr
                         key={`${l.detalle_id}-${i}`}
                         className={[
                           "border-b border-slate-100 transition-colors",
-                          alerta
-                            ? "bg-red-50 hover:bg-red-100/60"
+                          retrasado
+                            ? "bg-rose-50/70 hover:bg-rose-100/60"
                             : "even:bg-slate-50/50 hover:bg-slate-100/60",
                         ].join(" ")}
                       >
@@ -265,21 +364,28 @@ export function TabTiempos() {
                         </td>
                         <td className="px-4 py-3 font-medium text-slate-800">{l.plato}</td>
                         <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
-                          {fmtHora(l.hora_pedido)}
+                          {fmtHMS(l.hora_pedido)}
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
-                          {fmtHora(l.hora_lista)}
+                          {fmtHMS(l.inicio_cocina)}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
+                          {fmtHMS(l.hora_entrega)}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <span className={[
-                            "text-sm font-semibold tabular-nums",
-                            alerta ? "text-red-600" : "text-slate-700",
-                          ].join(" ")}>
-                            {fmtTiempo(l.minutos)}
-                          </span>
-                          {alerta && (
-                            <span className="ml-1.5 text-xs text-red-500">⚠</span>
-                          )}
+                          <div className="flex items-center justify-end gap-2">
+                            <span className={[
+                              "text-sm font-semibold tabular-nums",
+                              retrasado ? "text-rose-600" : "text-slate-700",
+                            ].join(" ")}>
+                              {fmtTiempo(l.segundos)}
+                            </span>
+                            {retrasado && (
+                              <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-[10px] px-1.5 h-4">
+                                Retrasado
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -289,11 +395,15 @@ export function TabTiempos() {
             </table>
           </div>
 
-          {/* Leyenda */}
-          {filtradas.some((l) => (l.minutos ?? 0) > 25) && (
-            <div className="px-4 py-2 border-t border-slate-100 bg-red-50/50 flex items-center gap-2">
-              <span className="text-xs text-red-500">⚠</span>
-              <p className="text-xs text-red-600">Filas resaltadas superaron los 25 minutos de preparación</p>
+          {/* Leyenda inferior */}
+          {filtradas.some((l) => (l.segundos ?? 0) > 25 * 60) && (
+            <div className="px-4 py-2 border-t border-slate-100 bg-rose-50/40 flex items-center gap-2">
+              <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-[10px] px-1.5 h-4">
+                Retrasado
+              </Badge>
+              <p className="text-xs text-rose-600">
+                Filas marcadas superaron los 25 minutos desde la apertura del pedido hasta la entrega
+              </p>
             </div>
           )}
         </div>

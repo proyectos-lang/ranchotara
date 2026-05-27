@@ -96,10 +96,10 @@ export function ArticulosManager() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Configuración de Artículos</h1>
+      <div className="mb-6 md:mb-8">
+        <h1 className="text-xl md:text-2xl font-bold text-foreground">Configuración de Artículos</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           Gestiona las categorías y los productos del menú del restaurante.
         </p>

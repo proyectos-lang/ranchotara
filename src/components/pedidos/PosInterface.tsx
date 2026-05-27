@@ -277,7 +277,7 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
       </div>
 
       {/* ── Catálogo ── */}
-      <div className="flex-1 overflow-auto pb-24">
+      <div className="flex-1 overflow-auto pb-28 md:pb-24">
         <CatalogoPOS
           productos={productosFiltrados}
           cartItems={cartItems}
@@ -312,9 +312,12 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
         </button>
       </div>
 
-      {/* ── Sheet del carrito ── */}
+      {/* ── Sheet del carrito (bottom en móvil, derecha en desktop) ── */}
       <Sheet open={showCarrito} onOpenChange={setShowCarrito}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+        <SheetContent
+          side="bottom"
+          className="h-[88vh] p-0 flex flex-col rounded-t-2xl md:rounded-none md:h-full md:fixed md:right-0 md:top-0 md:left-auto md:w-full md:max-w-md"
+        >
           <SheetHeader className="px-5 pt-5 pb-3 border-b border-slate-100 shrink-0">
             <SheetTitle className="text-base font-bold text-slate-800">
               Resumen del Pedido

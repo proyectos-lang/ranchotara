@@ -448,6 +448,7 @@ export function ProductosPanel({
                 </p>
               </div>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40 border-t">
@@ -550,6 +551,7 @@ export function ProductosPanel({
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

@@ -127,7 +127,7 @@ export function ComandaCard({ pedido, onNextState }: Props) {
             <li
               key={detalle.id}
               className={[
-                "flex items-center gap-3 px-4 py-3 transition-colors",
+                "flex flex-col sm:flex-row items-start sm:items-center gap-3 px-4 py-3 transition-colors",
                 esEntregado ? "opacity-40" : "",
               ].join(" ")}
             >
@@ -176,13 +176,13 @@ export function ComandaCard({ pedido, onNextState }: Props) {
 
               {/* Botón acción */}
               {esEntregado ? (
-                <span className="text-green-600 text-lg shrink-0">✓</span>
+                <span className="text-green-600 text-lg sm:shrink-0 self-end sm:self-auto">✓</span>
               ) : (
                 <button
                   onClick={() => handleClick(detalle)}
                   disabled={isLoading}
                   className={[
-                    "min-h-[44px] min-w-[96px] px-3 rounded-lg text-xs font-semibold shrink-0",
+                    "min-h-[44px] w-full sm:w-auto sm:min-w-[96px] px-4 rounded-lg text-sm font-semibold",
                     "border transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed",
                     esPendiente
                       ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"

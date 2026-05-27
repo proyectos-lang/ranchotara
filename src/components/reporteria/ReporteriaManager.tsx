@@ -6,25 +6,25 @@ import { TabTiempos } from "./TabTiempos";
 
 export function ReporteriaManager() {
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-4">
       <div>
         <h1 className="text-xl font-bold text-slate-800">Reportería Avanzada</h1>
         <p className="text-sm text-slate-500 mt-0.5">Análisis de ventas y eficiencia de cocina</p>
       </div>
 
       <Tabs defaultValue="ventas" className="space-y-4">
-        <TabsList className="bg-slate-100 p-1 rounded-xl h-auto">
+        <TabsList className="bg-slate-100 p-1 h-auto w-auto">
           <TabsTrigger
             value="ventas"
-            className="rounded-lg px-5 py-2 text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-slate-800 data-[state=active]:shadow-sm text-slate-500"
+            className="rounded-lg px-5 py-2 text-sm font-medium data-active:bg-white data-active:text-slate-800 data-active:shadow-sm text-slate-500"
           >
-            Detalle de Ventas
+            Resumen de Ventas
           </TabsTrigger>
           <TabsTrigger
             value="tiempos"
-            className="rounded-lg px-5 py-2 text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-slate-800 data-[state=active]:shadow-sm text-slate-500"
+            className="rounded-lg px-5 py-2 text-sm font-medium data-active:bg-white data-active:text-slate-800 data-active:shadow-sm text-slate-500"
           >
-            Tiempos de Cocina
+            Control de Tiempos
           </TabsTrigger>
         </TabsList>
 
