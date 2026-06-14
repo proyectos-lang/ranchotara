@@ -54,23 +54,23 @@ export function FinancieroManager() {
         </p>
       </div>
 
-      <Tabs defaultValue="gastos" className="space-y-4">
+      <Tabs defaultValue="gastos" className="gap-4">
         <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent p-0 h-auto gap-0">
           <TabsTrigger
             value="tipos"
-            className="rounded-none border-b-2 border-transparent px-5 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none bg-transparent"
+            className="rounded-none border-b-2 border-transparent px-5 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-active:border-primary data-active:text-foreground data-active:shadow-none bg-transparent"
           >
             Tipos de Costo
           </TabsTrigger>
           <TabsTrigger
             value="gastos"
-            className="rounded-none border-b-2 border-transparent px-5 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none bg-transparent"
+            className="rounded-none border-b-2 border-transparent px-5 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-active:border-primary data-active:text-foreground data-active:shadow-none bg-transparent"
           >
             Gastos
           </TabsTrigger>
           <TabsTrigger
             value="resultados"
-            className="rounded-none border-b-2 border-transparent px-5 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none bg-transparent"
+            className="rounded-none border-b-2 border-transparent px-5 py-3 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-active:border-primary data-active:text-foreground data-active:shadow-none bg-transparent"
           >
             Estado de Resultados
           </TabsTrigger>
