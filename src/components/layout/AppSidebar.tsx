@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Home, LayoutGrid, ChefHat, CreditCard, BarChart2,
   Utensils, Settings, ChevronLeft, ChevronRight, GlassWater, ClipboardList,
+  TrendingUp,
 } from "lucide-react";
 import {
   Tooltip,
@@ -33,6 +34,7 @@ const sections = [
       { href: "/admin/articulos",   label: "Artículos",  icon: Utensils      },
       { href: "/admin/mesas",       label: "Mesas",       icon: Settings      },
       { href: "/admin/reporteria",  label: "Reportería",  icon: ClipboardList },
+      { href: "/admin/financiero",  label: "Financiero",  icon: TrendingUp    },
     ],
   },
 ];

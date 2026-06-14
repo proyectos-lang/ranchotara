@@ -47,3 +47,45 @@ export type Mesa = {
   estado: EstadoMesa;
   zona: string | null;
 };
+
+// ── Módulo Financiero ────────────────────────────────────────────
+
+export type TipoCosto = {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  activo: boolean;
+  created_at: string;
+};
+
+export type Gasto = {
+  id: number;
+  tipo_costo_id: number;
+  concepto: string;
+  monto: number;
+  fecha: string;          // "YYYY-MM-DD"
+  notas: string | null;
+  created_at: string;
+};
+
+export type GastoConTipo = Gasto & {
+  tipos_costo: Pick<TipoCosto, "id" | "nombre">;
+};
+
+export type FilaEstadoResultados = {
+  anio: number;
+  mes: number;
+  tipo: "ingreso" | "gasto";
+  categoria: string;
+  total: number;
+};
+
+export type MesFinanciero = {
+  anio: number;
+  mes: number;
+  label: string;                              // "Jun 2025"
+  ingresos: number;
+  gastosPorCategoria: Record<string, number>;
+  totalGastos: number;
+  utilidad: number;
+};

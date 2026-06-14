@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 const modulos = [
   { id: 1, title: "Artículos", description: "Gestiona categorías, platos, bebidas y precios.", href: "/admin/articulos", icon: "🍽️", activo: true },
+  { id: 7, title: "Financiero", description: "Tipos de costo, registro de gastos y estado de resultados.", href: "/admin/financiero", icon: "💰", activo: true },
   { id: 2, title: "Mesas (Admin)", description: "Crea y configura las mesas del restaurante.", href: "/admin/mesas", icon: "🪑", activo: true },
   { id: 3, title: "Pedidos", description: "Toma de pedidos con selección visual.", href: "/panel", icon: "📋", activo: true },
   { id: 4, title: "Cocina", description: "Monitor de cola en tiempo real.", href: "/cocina", icon: "👨‍🍳", activo: true },
