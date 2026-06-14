@@ -109,7 +109,7 @@ export function GastoFormDialog({ open, gasto, tiposCosto, onSave, onClose }: Pr
           {/* Tipo de costo */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Tipo de Costo *</Label>
-            <Select value={tipoCostoId} onValueChange={setTipoCostoId}>
+            <Select value={tipoCostoId} onValueChange={(v) => setTipoCostoId(v ?? "")}>
               <SelectTrigger className="h-9 text-sm w-full">
                 <SelectValue placeholder="Seleccionar tipo..." />
               </SelectTrigger>
