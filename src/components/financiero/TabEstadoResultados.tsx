@@ -186,7 +186,7 @@ export function TabEstadoResultados() {
               axisLine={false}
             />
             <Tooltip
-              formatter={(value: number, name: string) => [fmtL(value), name]}
+              formatter={(value: unknown, name: unknown) => [fmtL(Number(value)), String(name)]}
               contentStyle={{ borderRadius: "0.625rem", border: "1px solid oklch(0.922 0 0)", fontSize: 12 }}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
