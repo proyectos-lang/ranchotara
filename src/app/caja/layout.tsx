@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Caja — Rancho Tara",
+  title: "Caja — Rancho Alba",
 };
 
 export default function CajaLayout({ children }: { children: React.ReactNode }) {

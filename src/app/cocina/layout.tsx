@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Monitor de Cocina — Rancho Tara",
+  title: "Monitor de Cocina — Rancho Alba",
 };
 
 export default function CocinaLayout({ children }: { children: React.ReactNode }) {

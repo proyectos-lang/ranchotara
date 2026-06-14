@@ -20,7 +20,7 @@ export default function Home() {
           <div>
             <div className="flex items-center gap-3 mb-1">
               <span className="text-3xl">🌿</span>
-              <h1 className="text-3xl font-bold text-foreground">Rancho Tara</h1>
+              <h1 className="text-3xl font-bold text-foreground">Rancho Alba</h1>
             </div>
             <p className="text-muted-foreground text-sm">Sistema de Gestión de Restaurante</p>
           </div>

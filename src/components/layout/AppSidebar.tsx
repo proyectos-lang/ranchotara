@@ -61,13 +61,10 @@ export function AppSidebar() {
   return (
     <aside
       className={cn(
-        "h-screen flex-shrink-0 flex-col text-sidebar-foreground border-r border-sidebar-border transition-all duration-300 ease-in-out overflow-hidden",
+        "h-screen flex-shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-300 ease-in-out overflow-hidden",
         "hidden md:flex",
         collapsed ? "w-16" : "w-56"
       )}
-      style={{
-        background: "linear-gradient(175deg, oklch(0.08 0.03 258) 0%, oklch(0.14 0.10 278) 40%, oklch(0.22 0.14 305) 75%, oklch(0.28 0.16 318) 100%)",
-      }}
     >
       {/* ── Logo + toggle ── */}
       <div className={cn(
@@ -79,7 +76,7 @@ export function AppSidebar() {
             <span className="text-xl shrink-0">🌿</span>
             <div className="min-w-0">
               <p className="text-sm font-bold leading-none text-sidebar-primary truncate">
-                Rancho Tara
+                Rancho Alba
               </p>
               <p className="text-[10px] text-sidebar-foreground/40 mt-0.5">POS System</p>
             </div>
