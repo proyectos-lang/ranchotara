@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import { Badge } from "@/components/ui/badge";
 import { ComandaCard } from "./ComandaCard";
 
@@ -24,6 +25,7 @@ export type PedidoCocina = {
 
 /* ── Componente principal ─────────────────────────────────────── */
 export function MonitorCocina() {
+  const { session } = useSession();
   const [pedidos, setPedidos] = useState<PedidoCocina[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -31,6 +33,7 @@ export function MonitorCocina() {
 
   /* ── Fetch de comandas activas ─── */
   const fetchPedidos = useCallback(async () => {
+    if (!session) return;
     const { data, error } = await supabase
       .from("pedidos")
       .select(`
@@ -46,6 +49,7 @@ export function MonitorCocina() {
           productos ( nombre, imagen_url )
         )
       `)
+      .eq("id_empresa", session.id_empresa)
       .in("estado", ["pendiente", "en_preparacion"])
       .order("id", { ascending: true });
 
@@ -56,7 +60,7 @@ export function MonitorCocina() {
     setPedidos((data ?? []) as unknown as PedidoCocina[]);
     setLastUpdate(new Date());
     setErrorMsg(null);
-  }, []);
+  }, [session]);
 
   /* ── Carga inicial ─── */
   useEffect(() => {

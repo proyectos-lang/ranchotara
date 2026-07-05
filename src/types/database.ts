@@ -1,11 +1,13 @@
 export type Categoria = {
   id: number;
+  id_empresa: number;
   nombre: string;
   descripcion: string | null;
 };
 
 export type Producto = {
   id: number;
+  id_empresa: number;
   categoria_id: number;
   nombre: string;
   descripcion: string | null;
@@ -23,6 +25,7 @@ export type MetodoPago = "efectivo" | "tarjeta" | "transferencia";
 
 export type Pedido = {
   id: number;
+  id_empresa: number;
   mesa_id: number | null;
   estado: EstadoPedido;
   total: number;
@@ -43,15 +46,43 @@ export type DetallePedido = {
 
 export type Mesa = {
   id: number;
+  id_empresa: number;
   numero_mesa: string;
   estado: EstadoMesa;
   zona: string | null;
+};
+
+// ── Multi-tenant ─────────────────────────────────────────────────
+
+export type Empresa = {
+  id: number;
+  nombre: string;
+  activo: boolean;
+  created_at: string;
+};
+
+export type Usuario = {
+  id: number;
+  id_empresa: number;
+  username: string;
+  nombre: string;
+  es_admin: boolean;
+  activo: boolean;
+  created_at: string;
+};
+
+export type PermisoUsuario = {
+  id: number;
+  id_usuario: number;
+  modulo: string;
+  puede_acceder: boolean;
 };
 
 // ── Módulo Financiero ────────────────────────────────────────────
 
 export type TipoCosto = {
   id: number;
+  id_empresa: number;
   nombre: string;
   descripcion: string | null;
   activo: boolean;
@@ -60,6 +91,7 @@ export type TipoCosto = {
 
 export type Gasto = {
   id: number;
+  id_empresa: number;
   tipo_costo_id: number;
   concepto: string;
   monto: number;
@@ -78,6 +110,7 @@ export type FilaEstadoResultados = {
   tipo: "ingreso" | "gasto";
   categoria: string;
   total: number;
+  id_empresa: number;
 };
 
 export type MesFinanciero = {

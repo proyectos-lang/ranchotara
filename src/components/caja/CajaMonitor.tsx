@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import { CuentaCard } from "./CuentaCard";
 import { ModalPago } from "./ModalPago";
 import type { MetodoPago } from "@/types/database";
@@ -18,6 +19,7 @@ export type CuentaPendiente = {
 
 /* ── Componente principal ─────────────────────────────────────── */
 export function CajaMonitor() {
+  const { session } = useSession();
   const [cuentas, setCuentas] = useState<CuentaPendiente[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export function CajaMonitor() {
 
   /* ── Fetch cuentas pendientes ─── */
   const fetchCuentas = useCallback(async () => {
+    if (!session) return;
     const { data, error } = await supabase
       .from("pedidos")
       .select(`
@@ -36,6 +39,7 @@ export function CajaMonitor() {
         mesa_id,
         mesas ( numero_mesa )
       `)
+      .eq("id_empresa", session.id_empresa)
       .not("estado", "eq", "pagado")
       .not("estado", "eq", "cancelado")
       .order("id", { ascending: true });
@@ -46,7 +50,7 @@ export function CajaMonitor() {
     }
     setCuentas((data ?? []) as unknown as CuentaPendiente[]);
     setErrorMsg(null);
-  }, []);
+  }, [session]);
 
   /* ── Carga inicial ─── */
   useEffect(() => {

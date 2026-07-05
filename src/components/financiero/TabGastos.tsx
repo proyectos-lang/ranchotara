@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { CalendarIcon, Plus, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import { useGastos } from "@/hooks/useGastos";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -63,6 +64,7 @@ function DateField({ label, value, onChange }: { label: string; value: Date | un
 }
 
 export function TabGastos({ tiposCosto }: Props) {
+  const { session } = useSession();
   const [dateFrom, setDateFrom] = useState<Date | undefined>(() => {
     const d = new Date();
     d.setDate(1);
@@ -91,7 +93,7 @@ export function TabGastos({ tiposCosto }: Props) {
       const { error: err } = await supabase.from("gastos").update(data).eq("id", editando.id);
       if (err) throw new Error(err.message);
     } else {
-      const { error: err } = await supabase.from("gastos").insert(data);
+      const { error: err } = await supabase.from("gastos").insert({ ...data, id_empresa: session!.id_empresa });
       if (err) throw new Error(err.message);
     }
     await refetch();

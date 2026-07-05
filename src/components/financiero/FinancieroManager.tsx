@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabTiposCosto } from "./TabTiposCosto";
@@ -10,22 +11,25 @@ import { TabEstadoResultados } from "./TabEstadoResultados";
 import type { TipoCosto } from "@/types/database";
 
 export function FinancieroManager() {
+  const { session } = useSession();
   const [tipos, setTipos]       = useState<TipoCosto[]>([]);
   const [cargando, setCargando] = useState(true);
 
   const fetchTipos = useCallback(async () => {
+    if (!session) return;
     const { data } = await supabase
       .from("tipos_costo")
       .select("*")
+      .eq("id_empresa", session.id_empresa)
       .order("nombre");
     setTipos((data ?? []) as TipoCosto[]);
     setCargando(false);
-  }, []);
+  }, [session]);
 
   useEffect(() => { fetchTipos(); }, [fetchTipos]);
 
   const handleCrearTipo = async (data: { nombre: string; descripcion: string }) => {
-    const { error } = await supabase.from("tipos_costo").insert({ ...data, activo: true });
+    const { error } = await supabase.from("tipos_costo").insert({ ...data, activo: true, id_empresa: session!.id_empresa });
     if (error) throw new Error(error.message);
     await fetchTipos();
   };

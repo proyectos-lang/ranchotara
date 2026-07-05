@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import { Categoria, Producto } from "@/types/database";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,16 +10,19 @@ import { CategoriasPanel } from "./CategoriasPanel";
 import { ProductosPanel } from "./ProductosPanel";
 
 export function ArticulosManager() {
+  const { session } = useSession();
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
+    if (!session) return;
     setError(null);
+    const idEmpresa = session.id_empresa;
     const [catsResult, prodsResult] = await Promise.all([
-      supabase.from("categorias").select("*").order("id"),
-      supabase.from("productos").select("*").order("id"),
+      supabase.from("categorias").select("*").eq("id_empresa", idEmpresa).order("id"),
+      supabase.from("productos").select("*").eq("id_empresa", idEmpresa).order("id"),
     ]);
     if (catsResult.error) {
       setError(`Error al cargar categorías: ${catsResult.error.message}`);
@@ -30,7 +34,7 @@ export function ArticulosManager() {
     }
     setCategorias(catsResult.data ?? []);
     setProductos(prodsResult.data ?? []);
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     setLoading(true);
@@ -38,7 +42,7 @@ export function ArticulosManager() {
   }, [fetchData]);
 
   const handleCreateCategoria = async (data: { nombre: string; descripcion: string }) => {
-    const { error: err } = await supabase.from("categorias").insert(data);
+    const { error: err } = await supabase.from("categorias").insert({ ...data, id_empresa: session!.id_empresa });
     if (err) throw new Error(err.message);
     await fetchData();
   };
@@ -50,7 +54,7 @@ export function ArticulosManager() {
   };
 
   const handleCreateProducto = async (data: Omit<Producto, "id">) => {
-    const { error: err } = await supabase.from("productos").insert(data);
+    const { error: err } = await supabase.from("productos").insert({ ...data, id_empresa: session!.id_empresa });
     if (err) throw new Error(err.message);
     await fetchData();
   };

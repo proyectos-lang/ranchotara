@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { CalendarIcon, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -113,6 +114,7 @@ function DateField({
 
 /* ── Componente principal ───────────────────────────────────────── */
 export function TabTiempos() {
+  const { session } = useSession();
   const [lineas, setLineas]     = useState<TiempoLinea[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
@@ -127,6 +129,7 @@ export function TabTiempos() {
 
   /* ── Fetch en dos pasos ── */
   const fetchData = useCallback(async () => {
+    if (!session) return;
     setLoading(true);
     setError(null);
 
@@ -137,6 +140,7 @@ export function TabTiempos() {
     const { data: pedidoIds, error: err1 } = await supabase
       .from("pedidos")
       .select("id")
+      .eq("id_empresa", session.id_empresa)
       .gte("fecha_creacion", `${fromStr}T00:00:00`)
       .lte("fecha_creacion", `${toStr}T23:59:59`);
 
@@ -184,7 +188,7 @@ export function TabTiempos() {
 
     setLineas(flat);
     setLoading(false);
-  }, [dateFrom, dateTo]);
+  }, [session, dateFrom, dateTo]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { CalendarIcon, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -112,6 +113,7 @@ function DateField({
 
 /* ── Componente principal ───────────────────────────────────────── */
 export function TabVentas() {
+  const { session } = useSession();
   const [lineas, setLineas]     = useState<VentaLinea[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
@@ -127,6 +129,7 @@ export function TabVentas() {
 
   /* ── Fetch ── */
   const fetchData = useCallback(async () => {
+    if (!session) return;
     setLoading(true);
     setError(null);
 
@@ -145,6 +148,7 @@ export function TabVentas() {
           productos ( nombre )
         )
       `)
+      .eq("id_empresa", session.id_empresa)
       .eq("estado", "pagado")
       .gte("fecha_creacion", `${fromStr}T00:00:00`)
       .lte("fecha_creacion", `${toStr}T23:59:59`)
@@ -168,7 +172,7 @@ export function TabVentas() {
     }
     setLineas(flat);
     setLoading(false);
-  }, [dateFrom, dateTo]);
+  }, [session, dateFrom, dateTo]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

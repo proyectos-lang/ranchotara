@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import type { GastoConTipo } from "@/types/database";
 
 interface UseGastosParams {
@@ -11,17 +12,20 @@ interface UseGastosParams {
 }
 
 export function useGastos({ desde, hasta, tipoCostoId }: UseGastosParams) {
+  const { session } = useSession();
   const [gastos, setGastos] = useState<GastoConTipo[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchGastos = useCallback(async () => {
+    if (!session) return;
     setCargando(true);
     setError(null);
 
     let query = supabase
       .from("gastos")
       .select("*, tipos_costo(id, nombre)")
+      .eq("id_empresa", session.id_empresa)
       .gte("fecha", desde)
       .lte("fecha", hasta)
       .order("fecha", { ascending: false });
@@ -38,7 +42,7 @@ export function useGastos({ desde, hasta, tipoCostoId }: UseGastosParams) {
       setGastos((data ?? []) as unknown as GastoConTipo[]);
     }
     setCargando(false);
-  }, [desde, hasta, tipoCostoId]);
+  }, [session, desde, hasta, tipoCostoId]);
 
   useEffect(() => { fetchGastos(); }, [fetchGastos]);
 

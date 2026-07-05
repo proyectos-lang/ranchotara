@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 
 /* ── Tipos raw de Supabase ─────────────────────────────────────── */
 type PedidoPagado = {
@@ -53,6 +54,7 @@ function fechaHoy(): string {
 
 /* ── Hook principal ────────────────────────────────────────────── */
 export function useAnalitica(): AnaliticaData {
+  const { session } = useSession();
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,8 +68,11 @@ export function useAnalitica(): AnaliticaData {
   const [trafico, setTrafico] = useState<InsightTrafico>({ horaPico: "—", diaPico: "—" });
 
   const cargarDatos = useCallback(async () => {
+    if (!session) return;
     setCargando(true);
     setError(null);
+
+    const idEmpresa = session.id_empresa;
 
     /* ── 1. Pedidos pagados ── */
     const hace30Dias = new Date();
@@ -76,6 +81,7 @@ export function useAnalitica(): AnaliticaData {
     const { data: pedidosRaw, error: errPedidos } = await supabase
       .from("pedidos")
       .select("id, total, fecha_pago, metodo_pago")
+      .eq("id_empresa", idEmpresa)
       .eq("estado", "pagado")
       .not("fecha_pago", "is", null)
       .gte("fecha_pago", hace30Dias.toISOString())
@@ -88,13 +94,14 @@ export function useAnalitica(): AnaliticaData {
     const { data: pedidosTodos, error: errTodos } = await supabase
       .from("pedidos")
       .select("id, fecha_pago, metodo_pago")
+      .eq("id_empresa", idEmpresa)
       .eq("estado", "pagado")
       .not("fecha_pago", "is", null);
 
     if (errTodos) { setError(errTodos.message); setCargando(false); return; }
     const todosLosPedidos = (pedidosTodos ?? []) as PedidoPagado[];
 
-    /* ── 2. Detalles de pedidos pagados (últimos 30 + todos para top5) ── */
+    /* ── 2. Detalles de pedidos pagados ── */
     const idsTodos = todosLosPedidos.map((p) => p.id);
 
     const { data: detallesRaw, error: errDetalles } = idsTodos.length > 0
@@ -110,7 +117,6 @@ export function useAnalitica(): AnaliticaData {
     /* ── 3. Procesamiento ── */
     const hoy = fechaHoy();
 
-    /* — KPIs hoy — */
     const pedidosHoy = pedidos.filter((p) => p.fecha_pago.slice(0, 10) === hoy);
     const ingresosHoy = pedidosHoy.reduce((s, p) => s + (p.total ?? 0), 0);
     const porMetodo = { efectivo: 0, tarjeta: 0, transferencia: 0 };
@@ -120,7 +126,6 @@ export function useAnalitica(): AnaliticaData {
     }
     setKpisHoy({ ingresos: ingresosHoy, pedidos: pedidosHoy.length, porMetodo });
 
-    /* — Platos vendidos hoy — */
     const idsHoy = new Set(pedidosHoy.map((p) => p.id));
     const detallesHoy = detalles.filter((d) => idsHoy.has(d.pedido_id));
     const mapaPlatosHoy = new Map<string, number>();
@@ -134,13 +139,11 @@ export function useAnalitica(): AnaliticaData {
         .sort((a, b) => b.cantidad - a.cantidad)
     );
 
-    /* — Ventas por día (últimos 30) — */
     const mapaVentas = new Map<string, number>();
     for (const p of pedidos) {
       const fecha = p.fecha_pago.slice(0, 10);
       mapaVentas.set(fecha, (mapaVentas.get(fecha) ?? 0) + (p.total ?? 0));
     }
-    /* Rellenar todos los días del rango aunque no haya venta */
     const ventasDias: VentaDia[] = [];
     for (let i = 29; i >= 0; i--) {
       const d = new Date();
@@ -150,7 +153,6 @@ export function useAnalitica(): AnaliticaData {
     }
     setVentasUltimos30(ventasDias);
 
-    /* — Top 5 platos histórico — */
     const mapaHistorico = new Map<string, number>();
     for (const d of detalles) {
       const nombre = d.productos?.nombre ?? "Producto";
@@ -163,7 +165,6 @@ export function useAnalitica(): AnaliticaData {
         .slice(0, 5)
     );
 
-    /* — Hora pico — */
     const mapaHoras = new Map<number, number>();
     for (const p of todosLosPedidos) {
       const hora = new Date(p.fecha_pago).getHours();
@@ -175,7 +176,6 @@ export function useAnalitica(): AnaliticaData {
       horaPico = `${String(maxHora).padStart(2, "0")}:00 – ${String(maxHora + 1).padStart(2, "0")}:00`;
     }
 
-    /* — Día pico — */
     const mapaDias = new Map<number, number>();
     for (const p of todosLosPedidos) {
       const dia = new Date(p.fecha_pago).getDay();
@@ -189,7 +189,7 @@ export function useAnalitica(): AnaliticaData {
 
     setTrafico({ horaPico, diaPico });
     setCargando(false);
-  }, []);
+  }, [session]);
 
   useEffect(() => { cargarDatos(); }, [cargarDatos]);
 

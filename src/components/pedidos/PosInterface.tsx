@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Search, ShoppingCart, X, GlassWater, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import { Mesa, Producto } from "@/types/database";
 import type { Categoria } from "@/types/database";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ interface PosInterfaceProps {
 }
 
 export function PosInterface({ barraMode = false }: PosInterfaceProps) {
+  const { session } = useSession();
   const params = useParams<{ mesa_id: string }>();
   const router = useRouter();
   const mesaId = barraMode ? null : Number(params.mesa_id);
@@ -44,10 +46,12 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
 
   /* ── Fetch inicial ─── */
   const fetchData = useCallback(async () => {
+    if (!session) return;
+    const idEmpresa = session.id_empresa;
     if (barraMode) {
       const [productosRes, categoriasRes] = await Promise.all([
-        supabase.from("productos").select("*").eq("disponible", true).order("nombre"),
-        supabase.from("categorias").select("*").order("nombre"),
+        supabase.from("productos").select("*").eq("id_empresa", idEmpresa).eq("disponible", true).order("nombre"),
+        supabase.from("categorias").select("*").eq("id_empresa", idEmpresa).order("nombre"),
       ]);
       if (productosRes.error) { setError(`Error al cargar productos: ${productosRes.error.message}`); return; }
       setProductos(productosRes.data ?? []);
@@ -56,9 +60,9 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
     }
 
     const [mesaRes, productosRes, categoriasRes] = await Promise.all([
-      supabase.from("mesas").select("*").eq("id", mesaId!).single(),
-      supabase.from("productos").select("*").eq("disponible", true).order("nombre"),
-      supabase.from("categorias").select("*").order("nombre"),
+      supabase.from("mesas").select("*").eq("id_empresa", idEmpresa).eq("id", mesaId!).single(),
+      supabase.from("productos").select("*").eq("id_empresa", idEmpresa).eq("disponible", true).order("nombre"),
+      supabase.from("categorias").select("*").eq("id_empresa", idEmpresa).order("nombre"),
     ]);
 
     if (mesaRes.error) { setError(`Mesa no encontrada: ${mesaRes.error.message}`); return; }
@@ -67,7 +71,7 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
     setMesa(mesaRes.data);
     setProductos(productosRes.data ?? []);
     setCategorias(categoriasRes.data ?? []);
-  }, [mesaId, barraMode]);
+  }, [session, mesaId, barraMode]);
 
   useEffect(() => {
     if (!barraMode && (!mesaId || isNaN(mesaId))) {
@@ -130,6 +134,7 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
       const { data: pedidoData, error: pedidoError } = await supabase
         .from("pedidos")
         .insert({
+          id_empresa: session!.id_empresa,
           mesa_id: barraMode ? null : mesaId,
           estado: "pendiente",
           total: parseFloat(cartTotal.toFixed(2)),

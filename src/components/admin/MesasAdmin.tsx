@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import { Mesa } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ const estadoColors: Record<Mesa["estado"], string> = {
 };
 
 export function MesasAdmin() {
+  const { session } = useSession();
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,17 +38,19 @@ export function MesasAdmin() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const fetchMesas = useCallback(async () => {
+    if (!session) return;
     setError(null);
     const { data, error: err } = await supabase
       .from("mesas")
       .select("*")
+      .eq("id_empresa", session.id_empresa)
       .order("id");
     if (err) {
       setError(`Error al cargar mesas: ${err.message}`);
     } else {
       setMesas(data ?? []);
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     setLoading(true);
@@ -71,7 +75,7 @@ export function MesasAdmin() {
     setFormError(null);
     const { error: err } = await supabase
       .from("mesas")
-      .insert({ numero_mesa: nombre, estado: "libre" });
+      .insert({ numero_mesa: nombre, estado: "libre", id_empresa: session!.id_empresa });
     if (err) {
       setFormError(err.message);
     } else {

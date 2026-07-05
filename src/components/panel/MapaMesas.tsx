@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { UtensilsCrossed, Utensils, CalendarClock, Clock, Settings, GlassWater } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import { Mesa, EstadoMesa } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +33,7 @@ function fmtMin(min: number): string {
 
 /* ── Componente principal ─────────────────────────────────────── */
 export function MapaMesas() {
+  const { session } = useSession();
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [pedidosAbiertos, setPedidosAbiertos] = useState<Map<number, string>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -49,11 +51,14 @@ export function MapaMesas() {
 
   /* ── Fetch mesas + pedidos abiertos ─── */
   const fetchData = useCallback(async () => {
+    if (!session) return;
+    const idEmpresa = session.id_empresa;
     const [mesasRes, pedidosRes] = await Promise.all([
-      supabase.from("mesas").select("*").order("id"),
+      supabase.from("mesas").select("*").eq("id_empresa", idEmpresa).order("id"),
       supabase
         .from("pedidos")
         .select("mesa_id, fecha_creacion")
+        .eq("id_empresa", idEmpresa)
         .in("estado", ["pendiente", "en_preparacion"]),
     ]);
 
@@ -71,7 +76,7 @@ export function MapaMesas() {
   useEffect(() => {
     setLoading(true);
     fetchData().finally(() => setLoading(false));
-  }, [fetchData]);
+  }, [session, fetchData]);
 
   /* ── Realtime ─── */
   useEffect(() => {

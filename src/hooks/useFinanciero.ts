@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/context/SessionContext";
 import type { FilaEstadoResultados, MesFinanciero } from "@/types/database";
 
 interface UseFinancieroParams {
@@ -11,18 +12,21 @@ interface UseFinancieroParams {
 }
 
 export function useFinanciero({ meses }: UseFinancieroParams) {
+  const { session } = useSession();
   const [columnas, setColumnas] = useState<MesFinanciero[]>([]);
   const [categoriasGasto, setCategoriasGasto] = useState<string[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchDatos = useCallback(async () => {
+    if (!session) return;
     setCargando(true);
     setError(null);
 
     const { data, error: err } = await supabase
       .from("estado_resultados_mensual")
-      .select("anio, mes, tipo, categoria, total");
+      .select("anio, mes, tipo, categoria, total, id_empresa")
+      .eq("id_empresa", session.id_empresa);
 
     if (err) {
       setError(err.message);
@@ -32,19 +36,17 @@ export function useFinanciero({ meses }: UseFinancieroParams) {
 
     const filas = (data ?? []) as FilaEstadoResultados[];
 
-    // Construir los N meses del rango (más antiguo → más reciente)
     const hoy = new Date();
     const rangoMeses: Array<{ anio: number; mes: number; label: string }> = [];
     for (let i = meses - 1; i >= 0; i--) {
       const d = startOfMonth(subMonths(hoy, i));
       rangoMeses.push({
         anio: d.getFullYear(),
-        mes:  d.getMonth() + 1,    // date-fns: 0-indexed, DB: 1-indexed
+        mes:  d.getMonth() + 1,
         label: format(d, "MMM yyyy", { locale: es }),
       });
     }
 
-    // Pivot: (anio, mes) → filas relevantes
     const clave = (a: number, m: number) => `${a}-${String(m).padStart(2, "0")}`;
     const porMes = new Map<string, FilaEstadoResultados[]>();
     for (const f of filas) {
@@ -53,7 +55,6 @@ export function useFinanciero({ meses }: UseFinancieroParams) {
       porMes.get(k)!.push(f);
     }
 
-    // Recopilar todas las categorías de gasto presentes en el rango
     const catSet = new Set<string>();
     for (const rm of rangoMeses) {
       const filasMes = porMes.get(clave(rm.anio, rm.mes)) ?? [];
@@ -64,7 +65,6 @@ export function useFinanciero({ meses }: UseFinancieroParams) {
     const cats = Array.from(catSet).sort();
     setCategoriasGasto(cats);
 
-    // Construir columnas
     const cols: MesFinanciero[] = rangoMeses.map((rm) => {
       const filasMes = porMes.get(clave(rm.anio, rm.mes)) ?? [];
       const ingresos = filasMes
@@ -89,7 +89,7 @@ export function useFinanciero({ meses }: UseFinancieroParams) {
 
     setColumnas(cols);
     setCargando(false);
-  }, [meses]);
+  }, [session, meses]);
 
   useEffect(() => { fetchDatos(); }, [fetchDatos]);
 
