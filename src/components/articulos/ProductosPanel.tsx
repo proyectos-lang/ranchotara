@@ -145,6 +145,7 @@ export function ProductosPanel({
         categoria_id: parseInt(editForm.categoria_id),
         imagen_url,
         disponible: editForm.disponible,
+        id_empresa: editingProducto.id_empresa,
       });
       setEditingProducto(null);
     } catch (err: unknown) {
