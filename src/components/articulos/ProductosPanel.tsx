@@ -37,7 +37,7 @@ import { Categoria, Producto } from "@/types/database";
 interface ProductosPanelProps {
   productos: Producto[];
   categorias: Categoria[];
-  onCreateProducto: (data: Omit<Producto, "id">) => Promise<void>;
+  onCreateProducto: (data: Omit<Producto, "id" | "id_empresa">) => Promise<void>;
   onUpdateProducto: (id: number, data: Omit<Producto, "id">) => Promise<void>;
   onDeleteProducto: (id: number) => Promise<void>;
   onToggleDisponible: (id: number, currentValue: boolean) => Promise<void>;

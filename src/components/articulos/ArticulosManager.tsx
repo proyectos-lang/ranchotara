@@ -53,7 +53,7 @@ export function ArticulosManager() {
     await fetchData();
   };
 
-  const handleCreateProducto = async (data: Omit<Producto, "id">) => {
+  const handleCreateProducto = async (data: Omit<Producto, "id" | "id_empresa">) => {
     const { error: err } = await supabase.from("productos").insert({ ...data, id_empresa: session!.id_empresa });
     if (err) throw new Error(err.message);
     await fetchData();
