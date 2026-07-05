@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { MasterAccessDialog } from "@/components/master/MasterAccessDialog";
 
 const modulos = [
   { id: 1, title: "Artículos", description: "Gestiona categorías, platos, bebidas y precios.", href: "/admin/articulos", icon: "🍽️", activo: true },
@@ -25,11 +26,14 @@ export default function Home() {
             </div>
             <p className="text-muted-foreground text-sm">Sistema de Gestión de Restaurante</p>
           </div>
-          <Link href="/panel">
-            <Button size="lg" className="gap-2 px-6">
-              🪑 Abrir Panel Operativo
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/panel">
+              <Button size="lg" className="gap-2 px-6">
+                🪑 Abrir Panel Operativo
+              </Button>
+            </Link>
+            <MasterAccessDialog />
+          </div>
         </div>
       </div>
 

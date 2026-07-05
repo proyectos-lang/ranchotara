@@ -5,8 +5,12 @@ import type { ModuloSlug } from "@/types/session";
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Rutas públicas: login y API de auth
-  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+  // Rutas públicas: login, API de auth y API master
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/master")
+  ) {
     return NextResponse.next();
   }
 
@@ -36,5 +40,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next|favicon|api/auth).*)"],
+  matcher: ["/((?!_next|favicon|api/auth|api/master).*)"],
 };
