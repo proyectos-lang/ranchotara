@@ -19,7 +19,7 @@ export type Producto = {
 export type EstadoMesa = "libre" | "ocupada" | "reservada";
 
 export type EstadoPedido = "pendiente" | "en_preparacion" | "listo" | "pagado" | "cancelado" | "entregado";
-export type EstadoCocina = "pendiente" | "listo" | "entregado";
+export type EstadoCocina = "pendiente" | "listo" | "entregado" | "cancelado";
 
 export type MetodoPago = "efectivo" | "tarjeta" | "transferencia";
 
@@ -32,6 +32,9 @@ export type Pedido = {
   fecha_creacion: string | null;
   metodo_pago: MetodoPago | null;
   fecha_pago: string | null;
+  propina: number;
+  descuento: number;
+  monto_recibido: number | null;
 };
 
 export type DetallePedido = {
@@ -41,7 +44,10 @@ export type DetallePedido = {
   cantidad: number;
   subtotal: number;
   estado_cocina: EstadoCocina;
+  nota: string | null;
+  hora_inicio_preparacion: string | null;
   hora_listo: string | null;
+  hora_entregado: string | null;
 };
 
 export type Mesa = {
