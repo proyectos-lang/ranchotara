@@ -11,6 +11,8 @@ export type DetalleConNombre = {
   id: number;
   estado_cocina: string;
   hora_listo: string | null;
+  hora_inicio_preparacion: string | null;
+  nota: string | null;
   cantidad: number;
   productos: { nombre: string; imagen_url: string | null } | null;
 };
@@ -45,12 +47,15 @@ export function MonitorCocina() {
           id,
           estado_cocina,
           hora_listo,
+          hora_inicio_preparacion,
+          nota,
           cantidad,
           productos ( nombre, imagen_url )
         )
       `)
       .eq("id_empresa", session.id_empresa)
       .in("estado", ["pendiente", "en_preparacion"])
+      .neq("detalles_pedido.estado_cocina", "cancelado")
       .order("id", { ascending: true });
 
     if (error) {
@@ -87,13 +92,47 @@ export function MonitorCocina() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchPedidos]);
 
+  /* ── Comenzar preparación de una comanda ─── */
+  const handleComenzar = useCallback(
+    async (pedidoId: number) => {
+      const ahora = new Date().toISOString();
+      const { error } = await supabase
+        .from("pedidos")
+        .update({ estado: "en_preparacion" })
+        .eq("id", pedidoId)
+        .eq("estado", "pendiente");
+
+      if (error) { setErrorMsg(error.message); return; }
+
+      await supabase
+        .from("detalles_pedido")
+        .update({ hora_inicio_preparacion: ahora })
+        .eq("pedido_id", pedidoId)
+        .is("hora_inicio_preparacion", null);
+
+      await fetchPedidos();
+    },
+    [fetchPedidos]
+  );
+
   /* ── Avanzar estado de un ítem (pendiente → listo → entregado) ─── */
   const handleNextState = useCallback(
     async (detalleId: number, estadoActual: string, pedidoId: number) => {
+      const ahora = new Date().toISOString();
       const nuevoEstado = estadoActual === "pendiente" ? "listo" : "entregado";
       const updateData: Record<string, unknown> = { estado_cocina: nuevoEstado };
       if (nuevoEstado === "listo") {
-        updateData.hora_listo = new Date().toISOString();
+        updateData.hora_listo = ahora;
+        // Si marcaron listo sin pasar por "Comenzar", registrar inicio también
+        const detalle = pedidos
+          .find((p) => p.id === pedidoId)
+          ?.detalles_pedido.find((d) => d.id === detalleId);
+        if (detalle && !detalle.hora_inicio_preparacion) {
+          updateData.hora_inicio_preparacion = ahora;
+        }
+      }
+      if (nuevoEstado === "entregado") {
+        updateData.hora_entregado = ahora;
       }
 
       const { error } = await supabase
@@ -103,21 +142,21 @@ export function MonitorCocina() {
 
       if (error) { setErrorMsg(error.message); return; }
 
-      /* Auto-cierre: si todos los detalles del pedido quedan 'entregado' */
+      /* Auto-cierre: re-consultar desde BD (evita carrera entre pantallas) */
       if (nuevoEstado === "entregado") {
-        const pedido = pedidos.find((p) => p.id === pedidoId);
-        if (pedido) {
-          const todosEntregados = pedido.detalles_pedido
-            .filter((d) => d.id !== detalleId)
-            .every((d) => d.estado_cocina === "entregado");
+        const { data: restantes } = await supabase
+          .from("detalles_pedido")
+          .select("id")
+          .eq("pedido_id", pedidoId)
+          .not("estado_cocina", "in", "(entregado,cancelado)");
 
-          if (todosEntregados) {
-            await supabase
-              .from("pedidos")
-              .update({ estado: "entregado" })
-              .eq("id", pedidoId);
-            // El Realtime eliminará la tarjeta automáticamente
-          }
+        if ((restantes ?? []).length === 0) {
+          await supabase
+            .from("pedidos")
+            .update({ estado: "entregado" })
+            .eq("id", pedidoId)
+            .in("estado", ["pendiente", "en_preparacion"]);
+          // El Realtime eliminará la tarjeta automáticamente
         }
       }
 
@@ -197,7 +236,7 @@ export function MonitorCocina() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {enCola.map((pedido) => (
-              <ComandaCard key={pedido.id} pedido={pedido} onNextState={handleNextState} />
+              <ComandaCard key={pedido.id} pedido={pedido} onNextState={handleNextState} onComenzar={handleComenzar} />
             ))}
           </div>
         </section>
@@ -217,7 +256,7 @@ export function MonitorCocina() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {cocinando.map((pedido) => (
-              <ComandaCard key={pedido.id} pedido={pedido} onNextState={handleNextState} />
+              <ComandaCard key={pedido.id} pedido={pedido} onNextState={handleNextState} onComenzar={handleComenzar} />
             ))}
           </div>
         </section>

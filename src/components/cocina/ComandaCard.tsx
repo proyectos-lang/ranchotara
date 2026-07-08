@@ -49,11 +49,13 @@ const ITEM_BADGE: Record<string, { className: string; label: string }> = {
 type Props = {
   pedido: PedidoCocina;
   onNextState: (detalleId: number, estadoActual: string, pedidoId: number) => Promise<void>;
+  onComenzar: (pedidoId: number) => Promise<void>;
 };
 
 /* ── Componente ────────────────────────────────────────────────── */
-export function ComandaCard({ pedido, onNextState }: Props) {
+export function ComandaCard({ pedido, onNextState, onComenzar }: Props) {
   const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [comenzando, setComenzando] = useState(false);
 
   const minutos = minutosDesde(pedido.fecha_creacion);
   const urgente = minutos > 15;
@@ -67,6 +69,15 @@ export function ComandaCard({ pedido, onNextState }: Props) {
       await onNextState(detalle.id, detalle.estado_cocina, pedido.id);
     } finally {
       setLoadingId(null);
+    }
+  };
+
+  const handleComenzar = async () => {
+    setComenzando(true);
+    try {
+      await onComenzar(pedido.id);
+    } finally {
+      setComenzando(false);
     }
   };
 
@@ -115,6 +126,19 @@ export function ComandaCard({ pedido, onNextState }: Props) {
         </div>
       </div>
 
+      {/* ── Botón Comenzar (solo en cola) ── */}
+      {pedido.estado === "pendiente" && (
+        <div className="px-4 pt-3">
+          <button
+            onClick={handleComenzar}
+            disabled={comenzando}
+            className="w-full min-h-[44px] rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {comenzando ? "Comenzando..." : "▶ Comenzar preparación"}
+          </button>
+        </div>
+      )}
+
       {/* ── Lista de ítems ── */}
       <ul className="flex flex-col divide-y divide-border flex-1">
         {pedido.detalles_pedido.map((detalle) => {
@@ -159,6 +183,11 @@ export function ComandaCard({ pedido, onNextState }: Props) {
                 >
                   {detalle.productos?.nombre ?? "Producto eliminado"}
                 </span>
+                {detalle.nota && (
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 inline-block">
+                    📝 {detalle.nota}
+                  </p>
+                )}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
                     Cantidad:{" "}
