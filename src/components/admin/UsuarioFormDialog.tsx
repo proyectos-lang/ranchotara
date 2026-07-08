@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "@/context/SessionContext";
-import { MODULOS } from "@/types/session";
+import { MODULOS, MODULO_LABELS } from "@/types/session";
 import type { ModuloSlug } from "@/types/session";
 import type { Usuario, PermisoUsuario } from "@/types/database";
 import {
@@ -26,19 +26,6 @@ interface Props {
   onClose: () => void;
   onSaved: () => Promise<void>;
 }
-
-const MODULO_LABELS: Record<ModuloSlug, string> = {
-  panel:              "Panel de Mesas",
-  pedidos:            "Pedidos / Barra",
-  cocina:             "Cocina",
-  caja:               "Caja",
-  analitica:          "Analítica",
-  "admin.articulos":  "Artículos",
-  "admin.mesas":      "Mesas (Admin)",
-  "admin.reporteria": "Reportería",
-  "admin.financiero": "Financiero",
-  "admin.usuarios":   "Usuarios (Admin)",
-};
 
 export function UsuarioFormDialog({ open, usuario, onClose, onSaved }: Props) {
   const { session } = useSession();

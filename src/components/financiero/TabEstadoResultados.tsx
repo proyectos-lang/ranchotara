@@ -22,9 +22,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { cn } from "@/lib/utils";
-
-const fmtL = (n: number) =>
-  `L. ${new Intl.NumberFormat("es-HN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)}`;
+import { fmtLps as fmtL } from "@/lib/format";
 
 const fmtLCorto = (n: number) => {
   if (Math.abs(n) >= 1_000_000) return `L.${(n / 1_000_000).toFixed(1)}M`;

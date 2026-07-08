@@ -6,9 +6,7 @@ import {
 } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, CHART_COLORS } from "@/components/ui/chart";
 import type { VentaDia, PlatoConteo, InsightTrafico } from "@/hooks/useAnalitica";
-
-const fmt = (n: number) =>
-  new Intl.NumberFormat("es-HN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+import { fmtL as fmt } from "@/lib/format";
 
 /* Etiqueta corta para el eje X: "dd/mm" */
 function labelFecha(iso: string) {

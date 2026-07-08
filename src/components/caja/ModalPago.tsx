@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { Calculator, Delete } from "lucide-react";
 import type { MetodoPago } from "@/types/database";
 import type { CuentaPendiente } from "./CajaMonitor";
+import { fmtL } from "@/lib/format";
 
 /* ── Métodos de pago ────────────────────────────────────────────── */
 const METODOS: { value: MetodoPago; label: string; emoji: string; desc: string }[] = [
@@ -91,10 +92,6 @@ function useCalculadora(totalCuenta: number) {
 
   return { calc, pressDigit, pressOp, pressEquals, pressClear, pressBack, loadTotal, vueltoCalc };
 }
-
-/* ── Helpers de formato ─────────────────────────────────────────── */
-const fmtL = (n: number) =>
-  new Intl.NumberFormat("es-HN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 /* ── Estilos botón calculadora ──────────────────────────────────── */
 const BTN =

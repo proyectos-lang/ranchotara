@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MODULOS } from "@/types/session";
+import { MODULOS, MODULO_LABELS } from "@/types/session";
 import type { ModuloSlug } from "@/types/session";
 import {
   Dialog,
@@ -17,19 +17,6 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 
 const MASTER_KEY = "Parchita2026colorbag";
-
-const MODULO_LABELS: Record<ModuloSlug, string> = {
-  panel:              "Panel de Mesas",
-  pedidos:            "Pedidos / Barra",
-  cocina:             "Cocina",
-  caja:               "Caja",
-  analitica:          "Analítica",
-  "admin.articulos":  "Artículos",
-  "admin.mesas":      "Mesas (Admin)",
-  "admin.reporteria": "Reportería",
-  "admin.financiero": "Financiero",
-  "admin.usuarios":   "Usuarios (Admin)",
-};
 
 type Empresa = { id: number; nombre: string; activo: boolean; created_at: string };
 type UsuarioRow = {

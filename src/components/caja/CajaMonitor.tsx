@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/context/SessionContext";
 import { CuentaCard } from "./CuentaCard";
 import { ModalPago } from "./ModalPago";
+import { fmtLps } from "@/lib/format";
 import type { MetodoPago } from "@/types/database";
 
 /* ── Tipos locales ─────────────────────────────────────────────── */
@@ -138,12 +139,7 @@ export function CajaMonitor() {
         </div>
         {cuentas.length > 0 && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-xs font-semibold text-primary">
-            Total por cobrar:{" "}
-            {new Intl.NumberFormat("es-HN", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }).format(totalPendiente)}{" "}
-            L.
+            Total por cobrar: {fmtLps(totalPendiente)}
           </div>
         )}
         <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">

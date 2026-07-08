@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { fmtLps as fmtL } from "@/lib/format";
 import { useSession } from "@/context/SessionContext";
 import { Label } from "@/components/ui/label";
 import {
@@ -14,12 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { DateField } from "@/components/ui/date-field";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 /* ── Tipos ──────────────────────────────────────────────────────── */
@@ -65,8 +61,6 @@ const fmtFecha = (d: Date | null) =>
 const fmtHora = (d: Date | null) =>
   d ? d.toLocaleTimeString("es-HN", { hour: "2-digit", minute: "2-digit" }) : "—";
 
-const fmtL = (n: number) =>
-  `L. ${new Intl.NumberFormat("es-HN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)}`;
 
 function enBloque(d: Date | null, bloque: string): boolean {
   if (!d || bloque === "todos") return true;
@@ -76,39 +70,6 @@ function enBloque(d: Date | null, bloque: string): boolean {
   if (bloque === "tarde")    return h >= 15 && h < 18;
   if (bloque === "noche")    return h >= 18 && h < 24;
   return true;
-}
-
-/* ── Date picker reutilizable ───────────────────────────────────── */
-function DateField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: Date | undefined;
-  onChange: (d: Date | undefined) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-        {label}
-      </Label>
-      <Popover>
-        <PopoverTrigger
-          render={<button type="button" />}
-          className="inline-flex items-center justify-start gap-2 h-9 w-full px-3 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-        >
-          <CalendarIcon className="w-4 h-4 text-slate-400 shrink-0" />
-          <span className={value ? "text-slate-800" : "text-slate-400"}>
-            {value ? format(value, "dd/MM/yyyy") : "Seleccionar fecha"}
-          </span>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0">
-          <Calendar mode="single" selected={value} onSelect={onChange} />
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
 }
 
 /* ── Componente principal ───────────────────────────────────────── */

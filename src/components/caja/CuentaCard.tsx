@@ -1,6 +1,7 @@
 "use client";
 
 import type { CuentaPendiente } from "./CajaMonitor";
+import { fmtLps } from "@/lib/format";
 
 const ESTADO_BADGE: Record<string, string> = {
   pendiente:      "bg-amber-100 text-amber-700 border-amber-200",
@@ -58,11 +59,7 @@ export function CuentaCard({ cuenta, onClick }: Props) {
       <div className="px-5 py-4">
         <p className="text-xs text-muted-foreground mb-1">Total a cobrar</p>
         <p className="text-2xl font-bold text-foreground">
-          L.{" "}
-          {new Intl.NumberFormat("es-HN", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }).format(cuenta.total ?? 0)}
+          {fmtLps(cuenta.total ?? 0)}
         </p>
         {horaEntrada && (
           <p className="text-[11px] text-muted-foreground mt-2">

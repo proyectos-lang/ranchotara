@@ -14,11 +14,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { CatalogoPOS } from "./CatalogoPOS";
 import { CarritoPOS } from "./CarritoPOS";
 import { cn } from "@/lib/utils";
+import { fmtLps as formatTotal } from "@/lib/format";
 
 export type CartItem = { producto: Producto; cantidad: number };
-
-const formatTotal = (n: number) =>
-  `L. ${new Intl.NumberFormat("es-HN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)}`;
 
 interface PosInterfaceProps {
   barraMode?: boolean;

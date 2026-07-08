@@ -4,6 +4,7 @@ import { Minus, Plus, Trash2, ChefHat, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { CartItem } from "./PosInterface";
+import { fmtLps as formatPrecio } from "@/lib/format";
 
 interface CarritoPOSProps {
   cartItems: CartItem[];
@@ -15,9 +16,6 @@ interface CarritoPOSProps {
   enviando: boolean;
   error: string | null;
 }
-
-const formatPrecio = (precio: number) =>
-  `L. ${new Intl.NumberFormat("es-HN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(precio)}`;
 
 export function CarritoPOS({ cartItems, total, onIncrease, onDecrease, onRemove, onEnviarCocina, enviando, error }: CarritoPOSProps) {
   const totalItems = cartItems.reduce((s, i) => s + i.cantidad, 0);

@@ -32,6 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
+import { fmtLps as formatPrecio } from "@/lib/format";
 import { Categoria, Producto } from "@/types/database";
 
 interface ProductosPanelProps {
@@ -50,12 +51,6 @@ const FORM_INIT = {
   categoria_id: "",
   disponible: true,
 };
-
-const formatPrecio = (precio: number) =>
-  `L. ${new Intl.NumberFormat("es-HN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(precio)}`;
 
 export function ProductosPanel({
   productos,

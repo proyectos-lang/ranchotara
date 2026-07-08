@@ -1,9 +1,7 @@
 "use client";
 
 import type { KpisHoy, PlatoConteo } from "@/hooks/useAnalitica";
-
-const fmt = (n: number) =>
-  new Intl.NumberFormat("es-HN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+import { fmtL as fmt } from "@/lib/format";
 
 type Props = {
   kpis: KpisHoy;

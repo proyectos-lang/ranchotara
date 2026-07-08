@@ -5,15 +5,13 @@ import { Plus, Check } from "lucide-react";
 import { Producto } from "@/types/database";
 import { CartItem } from "./PosInterface";
 import { cn } from "@/lib/utils";
+import { fmtLps as formatPrecio } from "@/lib/format";
 
 interface CatalogoPOSProps {
   productos: Producto[];
   cartItems: CartItem[];
   onAddToCart: (producto: Producto) => void;
 }
-
-const formatPrecio = (precio: number) =>
-  `L. ${new Intl.NumberFormat("es-HN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(precio)}`;
 
 export function CatalogoPOS({ productos, cartItems, onAddToCart }: CatalogoPOSProps) {
   const [clickedId, setClickedId] = useState<number | null>(null);

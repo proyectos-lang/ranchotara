@@ -37,6 +37,20 @@ export function serializeSession(session: Session): string {
   return encodeURIComponent(JSON.stringify(session));
 }
 
+// Etiquetas legibles de cada módulo (UI de permisos)
+export const MODULO_LABELS: Record<ModuloSlug, string> = {
+  panel:              "Panel de Mesas",
+  pedidos:            "Pedidos / Barra",
+  cocina:             "Cocina",
+  caja:               "Caja",
+  analitica:          "Analítica",
+  "admin.articulos":  "Artículos",
+  "admin.mesas":      "Mesas (Admin)",
+  "admin.reporteria": "Reportería",
+  "admin.financiero": "Financiero",
+  "admin.usuarios":   "Usuarios (Admin)",
+};
+
 // Mapeo módulo → prefijo de ruta para el middleware
 export const MODULO_RUTAS: Record<ModuloSlug, string> = {
   panel:               "/panel",
