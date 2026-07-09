@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/context/SessionContext";
-import { ESTADOS_ABIERTOS, liberarMesaSiSinPedidosAbiertos } from "@/lib/pedidos";
+import { ESTADOS_ABIERTOS, liberarMesaSiSinPedidosAbiertos, recalcularTotalPedido } from "@/lib/pedidos";
 import { CuentaCard } from "./CuentaCard";
 import { ModalPago } from "./ModalPago";
 import { fmtLps } from "@/lib/format";
@@ -250,6 +250,70 @@ export function CajaMonitor() {
     [session, fetchCuentas]
   );
 
+  /* ── Cancelar pedido completo ─── */
+  const handleCancelarPedido = useCallback(
+    async (pedidoId: number) => {
+      if (!session) return;
+      setErrorMsg(null);
+
+      const { data: p, error } = await supabase
+        .from("pedidos")
+        .update({ estado: "cancelado" })
+        .eq("id", pedidoId)
+        .in("estado", ESTADOS_ABIERTOS)
+        .select("mesa_id")
+        .maybeSingle();
+
+      if (error) {
+        setErrorMsg(`Error al cancelar pedido: ${error.message}`);
+        return;
+      }
+
+      if (p?.mesa_id != null) {
+        try {
+          await liberarMesaSiSinPedidosAbiertos(p.mesa_id, session.id_empresa);
+        } catch {
+          /* la mesa se puede liberar manualmente desde el panel */
+        }
+      }
+
+      setCuentaKeySeleccionada(null);
+      await fetchCuentas();
+    },
+    [session, fetchCuentas]
+  );
+
+  /* ── Cancelar ítem individual ─── */
+  const handleCancelarItem = useCallback(
+    async (detalleId: number, pedidoId: number) => {
+      setErrorMsg(null);
+
+      const { error } = await supabase
+        .from("detalles_pedido")
+        .update({ estado_cocina: "cancelado" })
+        .eq("id", detalleId);
+
+      if (error) {
+        setErrorMsg(`Error al cancelar ítem: ${error.message}`);
+        return;
+      }
+
+      try {
+        const { itemsActivos } = await recalcularTotalPedido(pedidoId);
+        // Pedido sin ítems vivos → cancelarlo por completo
+        if (itemsActivos === 0) {
+          await handleCancelarPedido(pedidoId);
+          return;
+        }
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : "Error al recalcular total.");
+      }
+
+      await fetchCuentas();
+    },
+    [fetchCuentas, handleCancelarPedido]
+  );
+
   /* ── Stats ─── */
   const totalPendiente = cuentas.reduce((sum, c) => sum + c.total, 0);
 
@@ -315,6 +379,8 @@ export function CajaMonitor() {
           cuenta={cuentaSeleccionada}
           procesando={procesando}
           onConfirmar={(datos) => handleRegistrarPago(cuentaSeleccionada, datos)}
+          onCancelarItem={handleCancelarItem}
+          onCancelarPedido={handleCancelarPedido}
           onClose={() => setCuentaKeySeleccionada(null)}
         />
       )}

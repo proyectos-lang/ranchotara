@@ -111,6 +111,7 @@ export function TabVentas() {
       `)
       .eq("id_empresa", session.id_empresa)
       .eq("estado", "pagado")
+      .neq("detalles_pedido.estado_cocina", "cancelado")
       .gte("fecha_creacion", `${fromStr}T00:00:00`)
       .lte("fecha_creacion", `${toStr}T23:59:59`)
       .order("fecha_creacion", { ascending: false });

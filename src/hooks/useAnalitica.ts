@@ -109,6 +109,7 @@ export function useAnalitica(): AnaliticaData {
           .from("detalles_pedido")
           .select("pedido_id, cantidad, subtotal, productos ( nombre )")
           .in("pedido_id", idsTodos)
+          .neq("estado_cocina", "cancelado")
       : { data: [], error: null };
 
     if (errDetalles) { setError(errDetalles.message); setCargando(false); return; }
