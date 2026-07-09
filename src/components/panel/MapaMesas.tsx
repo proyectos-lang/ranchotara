@@ -6,6 +6,7 @@ import { UtensilsCrossed, Utensils, CalendarClock, Clock, Settings, GlassWater }
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/context/SessionContext";
 import { Mesa, EstadoMesa } from "@/types/database";
+import { ESTADOS_ABIERTOS } from "@/lib/pedidos";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -59,7 +60,7 @@ export function MapaMesas() {
         .from("pedidos")
         .select("mesa_id, fecha_creacion")
         .eq("id_empresa", idEmpresa)
-        .in("estado", ["pendiente", "en_preparacion"]),
+        .in("estado", ESTADOS_ABIERTOS),
     ]);
 
     if (mesasRes.error) { setError(mesasRes.error.message); return; }
@@ -343,9 +344,18 @@ export function MapaMesas() {
                     <UtensilsCrossed className="w-4 h-4" /> Tomar Pedido
                   </Button>
                 </Link>
+              ) : ocupada ? (
+                <div className="space-y-2">
+                  <Link href={`/pedidos/${selectedMesa.id}`} onClick={() => setSelectedMesa(null)}>
+                    <Button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold gap-2">
+                      <UtensilsCrossed className="w-4 h-4" /> Agregar ítems
+                    </Button>
+                  </Link>
+                  <p className="text-xs text-slate-400 text-center">Para cobrar la cuenta, ir a Caja</p>
+                </div>
               ) : (
                 <Button className="w-full" disabled>
-                  {ocupada ? "Mesa en servicio — cobrar en Caja" : "Mesa reservada"}
+                  Mesa reservada
                 </Button>
               )}
 

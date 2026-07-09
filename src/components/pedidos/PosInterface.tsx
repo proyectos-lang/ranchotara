@@ -6,8 +6,9 @@ import Link from "next/link";
 import { ArrowLeft, Search, ShoppingCart, X, GlassWater, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/context/SessionContext";
+import { ESTADOS_ABIERTOS, recalcularTotalPedido } from "@/lib/pedidos";
 import { Mesa, Producto } from "@/types/database";
-import type { Categoria } from "@/types/database";
+import type { Categoria, EstadoPedido } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -16,7 +17,7 @@ import { CarritoPOS } from "./CarritoPOS";
 import { cn } from "@/lib/utils";
 import { fmtLps as formatTotal } from "@/lib/format";
 
-export type CartItem = { producto: Producto; cantidad: number };
+export type CartItem = { producto: Producto; cantidad: number; nota: string };
 
 interface PosInterfaceProps {
   barraMode?: boolean;
@@ -29,6 +30,7 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
   const mesaId = barraMode ? null : Number(params.mesa_id);
 
   const [mesa, setMesa] = useState<Mesa | null>(null);
+  const [pedidoAbierto, setPedidoAbierto] = useState<{ id: number; estado: EstadoPedido } | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,10 +59,20 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
       return;
     }
 
-    const [mesaRes, productosRes, categoriasRes] = await Promise.all([
+    const [mesaRes, productosRes, categoriasRes, pedidoRes] = await Promise.all([
       supabase.from("mesas").select("*").eq("id_empresa", idEmpresa).eq("id", mesaId!).single(),
       supabase.from("productos").select("*").eq("id_empresa", idEmpresa).eq("disponible", true).order("nombre"),
       supabase.from("categorias").select("*").eq("id_empresa", idEmpresa).order("nombre"),
+      // Pedido abierto más reciente de la mesa (si existe, se agregan ítems a él)
+      supabase
+        .from("pedidos")
+        .select("id, estado")
+        .eq("id_empresa", idEmpresa)
+        .eq("mesa_id", mesaId!)
+        .in("estado", ESTADOS_ABIERTOS)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     if (mesaRes.error) { setError(`Mesa no encontrada: ${mesaRes.error.message}`); return; }
@@ -69,6 +81,7 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
     setMesa(mesaRes.data);
     setProductos(productosRes.data ?? []);
     setCategorias(categoriasRes.data ?? []);
+    setPedidoAbierto((pedidoRes.data as { id: number; estado: EstadoPedido } | null) ?? null);
   }, [session, mesaId, barraMode]);
 
   useEffect(() => {
@@ -87,9 +100,13 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
       const ex = prev.find((i) => i.producto.id === producto.id);
       return ex
         ? prev.map((i) => i.producto.id === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i)
-        : [...prev, { producto, cantidad: 1 }];
+        : [...prev, { producto, cantidad: 1, nota: "" }];
     });
   }, []);
+
+  const setNotaItem = useCallback((productoId: number, nota: string) =>
+    setCartItems((prev) => prev.map((i) => i.producto.id === productoId ? { ...i, nota } : i)),
+  []);
 
   const increaseQty = useCallback((id: number) =>
     setCartItems((prev) => prev.map((i) => i.producto.id === id ? { ...i, cantidad: i.cantidad + 1 } : i)),
@@ -129,6 +146,39 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
     setEnviando(true);
     setEnvioError(null);
     try {
+      const detallesNuevos = (pedidoId: number) =>
+        cartItems.map((item) => ({
+          pedido_id: pedidoId,
+          producto_id: item.producto.id,
+          cantidad: item.cantidad,
+          subtotal: parseFloat((item.producto.precio * item.cantidad).toFixed(2)),
+          estado_cocina: "pendiente",
+          nota: item.nota.trim() || null,
+        }));
+
+      /* ── Rama 1: agregar ítems al pedido abierto de la mesa ── */
+      if (!barraMode && pedidoAbierto) {
+        const { error: detallesError } = await supabase
+          .from("detalles_pedido")
+          .insert(detallesNuevos(pedidoAbierto.id));
+        if (detallesError) throw new Error(detallesError.message);
+
+        await recalcularTotalPedido(pedidoAbierto.id);
+
+        // Si la cocina ya lo había cerrado, reabrirlo para que vea los ítems nuevos
+        if (pedidoAbierto.estado === "listo" || pedidoAbierto.estado === "entregado") {
+          await supabase
+            .from("pedidos")
+            .update({ estado: "pendiente" })
+            .eq("id", pedidoAbierto.id)
+            .in("estado", ["listo", "entregado"]);
+        }
+
+        router.push("/panel");
+        return;
+      }
+
+      /* ── Rama 2: crear pedido nuevo ── */
       const { data: pedidoData, error: pedidoError } = await supabase
         .from("pedidos")
         .insert({
@@ -141,15 +191,9 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
         .single();
       if (pedidoError) throw new Error(pedidoError.message);
 
-      const { error: detallesError } = await supabase.from("detalles_pedido").insert(
-        cartItems.map((item) => ({
-          pedido_id: pedidoData.id,
-          producto_id: item.producto.id,
-          cantidad: item.cantidad,
-          subtotal: parseFloat((item.producto.precio * item.cantidad).toFixed(2)),
-          estado_cocina: "pendiente",
-        }))
-      );
+      const { error: detallesError } = await supabase
+        .from("detalles_pedido")
+        .insert(detallesNuevos(pedidoData.id));
       if (detallesError) throw new Error(detallesError.message);
 
       if (!barraMode && mesaId) {
@@ -204,7 +248,11 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
   }
 
   const headerLabel = barraMode ? "Barra" : mesa!.numero_mesa;
-  const headerSub = barraMode ? "Pedido de consumo en barra" : mesa!.zona ?? undefined;
+  const headerSub = barraMode
+    ? "Pedido de consumo en barra"
+    : pedidoAbierto
+    ? `Agregando al pedido #${pedidoAbierto.id}`
+    : mesa!.zona ?? undefined;
 
   return (
     <div className="flex flex-col h-full bg-transparent">
@@ -337,9 +385,11 @@ export function PosInterface({ barraMode = false }: PosInterfaceProps) {
               onIncrease={increaseQty}
               onDecrease={decreaseQty}
               onRemove={removeFromCart}
+              onSetNota={setNotaItem}
               onEnviarCocina={handleEnviarCocina}
               enviando={enviando}
               error={envioError}
+              modoAgregar={!barraMode && !!pedidoAbierto}
             />
           </div>
         </SheetContent>
