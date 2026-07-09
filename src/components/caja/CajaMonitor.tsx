@@ -1,33 +1,69 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/context/SessionContext";
+import { ESTADOS_ABIERTOS, liberarMesaSiSinPedidosAbiertos } from "@/lib/pedidos";
 import { CuentaCard } from "./CuentaCard";
 import { ModalPago } from "./ModalPago";
 import { fmtLps } from "@/lib/format";
 import type { MetodoPago } from "@/types/database";
 
 /* ── Tipos locales ─────────────────────────────────────────────── */
-export type CuentaPendiente = {
+export type DetalleCuenta = {
+  id: number;
+  cantidad: number;
+  subtotal: number;
+  estado_cocina: string;
+  nota: string | null;
+  productos: { nombre: string } | null;
+};
+
+export type PedidoCuenta = {
   id: number;
   estado: string;
   total: number;
   fecha_creacion: string | null;
-  mesa_id: number;
+  mesa_id: number | null;
   mesas: { numero_mesa: string } | null;
+  detalles_pedido: DetalleCuenta[];
+};
+
+export type CuentaMesa = {
+  key: string;
+  mesaId: number | null;
+  numeroMesa: string | null;
+  pedidos: PedidoCuenta[];
+  total: number;
+  fechaApertura: string | null;
+  estado: string;
+};
+
+export type DatosPago = {
+  metodo: MetodoPago;
+  propina: number;
+  descuento: number;
+  montoRecibido: number | null;
+};
+
+/* Orden de avance para el badge de la cuenta (se muestra el menos avanzado) */
+const ORDEN_ESTADO: Record<string, number> = {
+  pendiente: 0,
+  en_preparacion: 1,
+  listo: 2,
+  entregado: 3,
 };
 
 /* ── Componente principal ─────────────────────────────────────── */
 export function CajaMonitor() {
   const { session } = useSession();
-  const [cuentas, setCuentas] = useState<CuentaPendiente[]>([]);
+  const [pedidos, setPedidos] = useState<PedidoCuenta[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [cuentaSeleccionada, setCuentaSeleccionada] = useState<CuentaPendiente | null>(null);
+  const [cuentaKeySeleccionada, setCuentaKeySeleccionada] = useState<string | null>(null);
   const [procesando, setProcesando] = useState(false);
 
-  /* ── Fetch cuentas pendientes ─── */
+  /* ── Fetch pedidos abiertos ─── */
   const fetchCuentas = useCallback(async () => {
     if (!session) return;
     const { data, error } = await supabase
@@ -38,18 +74,25 @@ export function CajaMonitor() {
         total,
         fecha_creacion,
         mesa_id,
-        mesas ( numero_mesa )
+        mesas ( numero_mesa ),
+        detalles_pedido (
+          id,
+          cantidad,
+          subtotal,
+          estado_cocina,
+          nota,
+          productos ( nombre )
+        )
       `)
       .eq("id_empresa", session.id_empresa)
-      .not("estado", "eq", "pagado")
-      .not("estado", "eq", "cancelado")
+      .in("estado", ESTADOS_ABIERTOS)
       .order("id", { ascending: true });
 
     if (error) {
       setErrorMsg(`Error al cargar cuentas: ${error.message}`);
       return;
     }
-    setCuentas((data ?? []) as unknown as CuentaPendiente[]);
+    setPedidos((data ?? []) as unknown as PedidoCuenta[]);
     setErrorMsg(null);
   }, [session]);
 
@@ -68,50 +111,147 @@ export function CajaMonitor() {
         { event: "*", schema: "ranchotara", table: "pedidos" },
         () => { fetchCuentas(); }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "ranchotara", table: "detalles_pedido" },
+        () => { fetchCuentas(); }
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [fetchCuentas]);
 
-  /* ── Registrar pago ─── */
+  /* ── Agrupar pedidos en cuentas (una por mesa; barra individual) ─── */
+  const cuentas = useMemo<CuentaMesa[]>(() => {
+    const map = new Map<string, CuentaMesa>();
+    for (const p of pedidos) {
+      const key = p.mesa_id !== null ? `mesa-${p.mesa_id}` : `barra-${p.id}`;
+      const existente = map.get(key);
+      if (existente) {
+        existente.pedidos.push(p);
+        existente.total += p.total ?? 0;
+        if (
+          p.fecha_creacion &&
+          (!existente.fechaApertura || p.fecha_creacion < existente.fechaApertura)
+        ) {
+          existente.fechaApertura = p.fecha_creacion;
+        }
+        if ((ORDEN_ESTADO[p.estado] ?? 0) < (ORDEN_ESTADO[existente.estado] ?? 0)) {
+          existente.estado = p.estado;
+        }
+      } else {
+        map.set(key, {
+          key,
+          mesaId: p.mesa_id,
+          numeroMesa: p.mesas?.numero_mesa ?? null,
+          pedidos: [p],
+          total: p.total ?? 0,
+          fechaApertura: p.fecha_creacion,
+          estado: p.estado,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [pedidos]);
+
+  const cuentaSeleccionada = useMemo(
+    () => cuentas.find((c) => c.key === cuentaKeySeleccionada) ?? null,
+    [cuentas, cuentaKeySeleccionada]
+  );
+
+  /* ── Registrar pago (multi-pedido) ─── */
   const handleRegistrarPago = useCallback(
-    async (cuentaId: number, mesaId: number, metodo: MetodoPago) => {
+    async (cuenta: CuentaMesa, datos: DatosPago) => {
+      if (!session) return;
       setProcesando(true);
       setErrorMsg(null);
 
-      const { error: errPedido } = await supabase
-        .from("pedidos")
-        .update({
-          estado: "pagado",
-          metodo_pago: metodo,
-          fecha_pago: new Date().toISOString(),
-        })
-        .eq("id", cuentaId);
+      const ids = cuenta.pedidos.map((p) => p.id);
 
-      if (errPedido) {
-        setErrorMsg(`Error al registrar pago: ${errPedido.message}`);
+      /* 1. Verificación de concurrencia: si la cuenta cambió, abortar */
+      const { data: verif, error: errVerif } = await supabase
+        .from("pedidos")
+        .select("id, total")
+        .in("id", ids)
+        .in("estado", ESTADOS_ABIERTOS);
+
+      if (errVerif) {
+        setErrorMsg(`Error al verificar la cuenta: ${errVerif.message}`);
         setProcesando(false);
         return;
       }
 
-      const { error: errMesa } = await supabase
-        .from("mesas")
-        .update({ estado: "libre" })
-        .eq("id", mesaId);
+      const totalActual = (verif ?? []).reduce((s, p) => s + (p.total ?? 0), 0);
+      if (
+        (verif ?? []).length !== ids.length ||
+        Math.abs(totalActual - cuenta.total) > 0.01
+      ) {
+        setErrorMsg("La cuenta cambió (ítems nuevos o cancelados). Revisa de nuevo antes de cobrar.");
+        setProcesando(false);
+        setCuentaKeySeleccionada(null);
+        await fetchCuentas();
+        return;
+      }
 
-      if (errMesa) {
-        setErrorMsg(`Pago registrado, pero error al liberar mesa: ${errMesa.message}`);
+      const fechaPago = new Date().toISOString();
+      /* 2. Pedido principal (menor id) lleva propina/descuento/monto completos;
+         el resto queda en 0/null para no duplicar en reportes */
+      const [principal, ...resto] = ids;
+
+      const { error: errPrincipal } = await supabase
+        .from("pedidos")
+        .update({
+          estado: "pagado",
+          metodo_pago: datos.metodo,
+          fecha_pago: fechaPago,
+          propina: datos.propina,
+          descuento: datos.descuento,
+          monto_recibido: datos.montoRecibido,
+        })
+        .eq("id", principal)
+        .neq("estado", "pagado");
+
+      if (errPrincipal) {
+        setErrorMsg(`Error al registrar pago: ${errPrincipal.message}`);
+        setProcesando(false);
+        return;
+      }
+
+      if (resto.length > 0) {
+        const { error: errResto } = await supabase
+          .from("pedidos")
+          .update({ estado: "pagado", metodo_pago: datos.metodo, fecha_pago: fechaPago })
+          .in("id", resto)
+          .not("estado", "in", "(pagado,cancelado)");
+
+        if (errResto) {
+          setErrorMsg(`Pago parcial: el pedido #${principal} quedó pagado pero otros fallaron: ${errResto.message}`);
+          setProcesando(false);
+          await fetchCuentas();
+          return;
+        }
+      }
+
+      /* 3. Liberar mesa solo si no quedan pedidos abiertos */
+      if (cuenta.mesaId !== null) {
+        try {
+          await liberarMesaSiSinPedidosAbiertos(cuenta.mesaId, session.id_empresa);
+        } catch (err) {
+          setErrorMsg(
+            `Pago registrado, pero error al liberar mesa: ${err instanceof Error ? err.message : "desconocido"}`
+          );
+        }
       }
 
       setProcesando(false);
-      setCuentaSeleccionada(null);
+      setCuentaKeySeleccionada(null);
       await fetchCuentas();
     },
-    [fetchCuentas]
+    [session, fetchCuentas]
   );
 
   /* ── Stats ─── */
-  const totalPendiente = cuentas.reduce((sum, c) => sum + (c.total ?? 0), 0);
+  const totalPendiente = cuentas.reduce((sum, c) => sum + c.total, 0);
 
   /* ── Loading ─── */
   if (loading) {
@@ -161,9 +301,9 @@ export function CajaMonitor() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {cuentas.map((cuenta) => (
             <CuentaCard
-              key={cuenta.id}
+              key={cuenta.key}
               cuenta={cuenta}
-              onClick={() => setCuentaSeleccionada(cuenta)}
+              onClick={() => setCuentaKeySeleccionada(cuenta.key)}
             />
           ))}
         </div>
@@ -174,10 +314,8 @@ export function CajaMonitor() {
         <ModalPago
           cuenta={cuentaSeleccionada}
           procesando={procesando}
-          onConfirmar={(metodo) =>
-            handleRegistrarPago(cuentaSeleccionada.id, cuentaSeleccionada.mesa_id, metodo)
-          }
-          onClose={() => setCuentaSeleccionada(null)}
+          onConfirmar={(datos) => handleRegistrarPago(cuentaSeleccionada, datos)}
+          onClose={() => setCuentaKeySeleccionada(null)}
         />
       )}
     </div>

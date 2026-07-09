@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Calculator, Delete } from "lucide-react";
 import type { MetodoPago } from "@/types/database";
-import type { CuentaPendiente } from "./CajaMonitor";
+import type { CuentaMesa, DatosPago } from "./CajaMonitor";
 import { fmtL } from "@/lib/format";
 
 /* ── Métodos de pago ────────────────────────────────────────────── */
@@ -97,33 +97,95 @@ function useCalculadora(totalCuenta: number) {
 const BTN =
   "flex items-center justify-center h-12 rounded-xl font-semibold text-base transition-all active:scale-95 select-none focus:outline-none";
 
+const CHIP =
+  "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors";
+
 /* ── Props ──────────────────────────────────────────────────────── */
 type Props = {
-  cuenta: CuentaPendiente;
+  cuenta: CuentaMesa;
   procesando: boolean;
-  onConfirmar: (metodo: MetodoPago) => Promise<void>;
+  onConfirmar: (datos: DatosPago) => Promise<void>;
   onClose: () => void;
+  onCancelarItem?: (detalleId: number, pedidoId: number) => Promise<void>;
+  onCancelarPedido?: (pedidoId: number) => Promise<void>;
 };
 
 /* ── Componente ─────────────────────────────────────────────────── */
-export function ModalPago({ cuenta, procesando, onConfirmar, onClose }: Props) {
+export function ModalPago({ cuenta, procesando, onConfirmar, onClose, onCancelarItem, onCancelarPedido }: Props) {
   const [metodo, setMetodo]     = useState<MetodoPago>("efectivo");
   const [showCalc, setShowCalc] = useState(false);
+
+  /* Propina y descuento */
+  const [propinaStr, setPropinaStr]     = useState("");
+  const [descuentoStr, setDescuentoStr] = useState("");
 
   /* Monto recibido del cliente */
   const [montoRecibido, setMontoRecibido] = useState("");
 
-  const total = cuenta.total ?? 0;
+  /* Cancelaciones (confirmación inline) */
+  const [confirmandoItem, setConfirmandoItem]     = useState<number | null>(null);
+  const [confirmandoPedido, setConfirmandoPedido] = useState<number | null>(null);
+  const [cancelando, setCancelando]               = useState(false);
+
+  const total = cuenta.total;
+  const propina   = Math.max(0, parseFloat(propinaStr.replace(/,/g, "")) || 0);
+  const descuento = Math.max(0, parseFloat(descuentoStr.replace(/,/g, "")) || 0);
+  const descuentoInvalido = descuento > total;
+  const totalFinal = Math.max(0, parseFloat((total - Math.min(descuento, total) + propina).toFixed(2)));
+
   const { calc, pressDigit, pressOp, pressEquals, pressClear, pressBack, loadTotal, vueltoCalc } =
-    useCalculadora(total);
+    useCalculadora(totalFinal);
 
   /* Vuelto a partir del campo de monto recibido */
   const montoNum     = parseFloat(montoRecibido.replace(/,/g, "")) || 0;
-  const vuelto       = montoNum >= total ? montoNum - total : null;
-  const pagoExacto   = montoNum === total;
-  const montoInvalid = montoNum > 0 && montoNum < total;
+  const vuelto       = montoNum >= totalFinal ? montoNum - totalFinal : null;
+  const pagoExacto   = montoNum === totalFinal;
+  const montoInvalid = montoNum > 0 && montoNum < totalFinal;
 
-  const mesa = cuenta.mesas?.numero_mesa ?? "—";
+  const titulo = cuenta.mesaId === null ? "Barra" : `Mesa ${cuenta.numeroMesa ?? "—"}`;
+
+  /* Ítems activos por pedido */
+  const pedidosConItems = useMemo(
+    () =>
+      cuenta.pedidos.map((p) => ({
+        ...p,
+        itemsActivos: p.detalles_pedido.filter((d) => d.estado_cocina !== "cancelado"),
+      })),
+    [cuenta.pedidos]
+  );
+
+  const confirmarDeshabilitado =
+    procesando || descuentoInvalido || (metodo === "efectivo" && montoInvalid);
+
+  const handleConfirmar = () =>
+    onConfirmar({
+      metodo,
+      propina,
+      descuento: Math.min(descuento, total),
+      montoRecibido: metodo === "efectivo" && montoNum > 0 ? montoNum : null,
+    });
+
+  const handleCancelarItem = async (detalleId: number, pedidoId: number) => {
+    if (!onCancelarItem) return;
+    setCancelando(true);
+    try {
+      await onCancelarItem(detalleId, pedidoId);
+      setConfirmandoItem(null);
+    } finally {
+      setCancelando(false);
+    }
+  };
+
+  const handleCancelarPedido = async (pedidoId: number) => {
+    if (!onCancelarPedido) return;
+    setCancelando(true);
+    try {
+      await onCancelarPedido(pedidoId);
+      setConfirmandoPedido(null);
+    } finally {
+      setCancelando(false);
+    }
+  };
 
   return (
     <div
@@ -136,7 +198,7 @@ export function ModalPago({ cuenta, procesando, onConfirmar, onClose }: Props) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <div>
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Registrar Pago</p>
-            <p className="text-lg font-bold text-foreground">Mesa {mesa}</p>
+            <p className="text-lg font-bold text-foreground">{titulo}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -165,10 +227,203 @@ export function ModalPago({ cuenta, procesando, onConfirmar, onClose }: Props) {
         {/* ── Scroll area ── */}
         <div className="overflow-y-auto flex-1">
 
-          {/* Total destacado */}
+          {/* ── Detalle de la cuenta ── */}
+          <div className="px-6 py-4 border-b border-border space-y-3">
+            <p className="text-sm font-semibold text-foreground">Detalle de la cuenta</p>
+            {pedidosConItems.map((p) => (
+              <div key={p.id} className="rounded-xl border border-border overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-1.5 bg-muted/40 border-b border-border">
+                  <p className="text-[11px] font-semibold text-muted-foreground">
+                    Pedido #{p.id}
+                    {p.fecha_creacion && (
+                      <span className="font-normal">
+                        {" · "}
+                        {new Date(p.fecha_creacion).toLocaleTimeString("es-HN", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    )}
+                  </p>
+                  {onCancelarPedido && (
+                    confirmandoPedido === p.id ? (
+                      <span className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleCancelarPedido(p.id)}
+                          disabled={cancelando}
+                          className="text-[10px] font-bold text-red-600 hover:text-red-700 disabled:opacity-50"
+                        >
+                          {cancelando ? "..." : "Confirmar"}
+                        </button>
+                        <button
+                          onClick={() => setConfirmandoPedido(null)}
+                          disabled={cancelando}
+                          className="text-[10px] text-muted-foreground hover:text-foreground"
+                        >
+                          No
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmandoPedido(p.id)}
+                        disabled={procesando || cancelando}
+                        className="text-[10px] text-muted-foreground hover:text-red-600 transition-colors"
+                      >
+                        Cancelar pedido
+                      </button>
+                    )
+                  )}
+                </div>
+                <ul className="divide-y divide-border">
+                  {p.itemsActivos.length === 0 ? (
+                    <li className="px-3 py-2 text-xs text-muted-foreground italic">Sin ítems activos</li>
+                  ) : (
+                    p.itemsActivos.map((d) => (
+                      <li key={d.id} className="flex items-center gap-2 px-3 py-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-foreground truncate">
+                            <span className="font-semibold">{d.cantidad}×</span>{" "}
+                            {d.productos?.nombre ?? "—"}
+                          </p>
+                          {d.nota && (
+                            <p className="text-[10px] text-amber-600 truncate">📝 {d.nota}</p>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                          L. {fmtL(d.subtotal)}
+                        </span>
+                        {onCancelarItem && (
+                          confirmandoItem === d.id ? (
+                            <span className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => handleCancelarItem(d.id, p.id)}
+                                disabled={cancelando}
+                                className="text-[10px] font-bold text-red-600 hover:text-red-700 disabled:opacity-50"
+                              >
+                                {cancelando ? "..." : "Sí"}
+                              </button>
+                              <button
+                                onClick={() => setConfirmandoItem(null)}
+                                disabled={cancelando}
+                                className="text-[10px] text-muted-foreground hover:text-foreground"
+                              >
+                                No
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmandoItem(d.id)}
+                              disabled={procesando || cancelando}
+                              className="text-slate-300 hover:text-red-500 transition-colors shrink-0 text-sm leading-none"
+                              title="Cancelar ítem"
+                            >
+                              ✕
+                            </button>
+                          )
+                        )}
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Propina y descuento ── */}
+          <div className="px-6 py-4 border-b border-border grid grid-cols-2 gap-4">
+            {/* Propina */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-foreground">Propina</p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setPropinaStr((total * 0.10).toFixed(2))}
+                  className={`${CHIP} bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100`}
+                >
+                  10%
+                </button>
+                <button
+                  onClick={() => setPropinaStr((total * 0.15).toFixed(2))}
+                  className={`${CHIP} bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100`}
+                >
+                  15%
+                </button>
+                <button
+                  onClick={() => setPropinaStr("")}
+                  className={`${CHIP} bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200`}
+                >
+                  Sin
+                </button>
+              </div>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">L.</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={propinaStr}
+                  onChange={(e) => setPropinaStr(e.target.value)}
+                  className="w-full pl-7 pr-2 h-9 rounded-lg border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400/30"
+                />
+              </div>
+            </div>
+
+            {/* Descuento */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-foreground">Descuento</p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setDescuentoStr((total * 0.05).toFixed(2))}
+                  className={`${CHIP} bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100`}
+                >
+                  5%
+                </button>
+                <button
+                  onClick={() => setDescuentoStr((total * 0.10).toFixed(2))}
+                  className={`${CHIP} bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100`}
+                >
+                  10%
+                </button>
+                <button
+                  onClick={() => setDescuentoStr("")}
+                  className={`${CHIP} bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200`}
+                >
+                  Sin
+                </button>
+              </div>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">L.</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={descuentoStr}
+                  onChange={(e) => setDescuentoStr(e.target.value)}
+                  className={[
+                    "w-full pl-7 pr-2 h-9 rounded-lg border bg-slate-50 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2",
+                    descuentoInvalido
+                      ? "border-red-300 focus:ring-red-400/30"
+                      : "border-slate-200 focus:ring-amber-400/30",
+                  ].join(" ")}
+                />
+              </div>
+              {descuentoInvalido && (
+                <p className="text-[10px] text-red-600 font-medium">
+                  No puede superar el total (L. {fmtL(total)})
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* ── Total destacado ── */}
           <div className="px-6 py-5 bg-primary/5 border-b border-border text-center">
+            {(propina > 0 || descuento > 0) && (
+              <div className="text-xs text-muted-foreground mb-2 space-y-0.5">
+                <p>Consumo: L. {fmtL(total)}</p>
+                {descuento > 0 && <p className="text-amber-600">Descuento: −L. {fmtL(Math.min(descuento, total))}</p>}
+                {propina > 0 && <p className="text-emerald-600">Propina: +L. {fmtL(propina)}</p>}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mb-1">Total a cobrar</p>
-            <p className="text-4xl font-black text-primary">L. {fmtL(total)}</p>
+            <p className="text-4xl font-black text-primary">L. {fmtL(totalFinal)}</p>
           </div>
 
           {/* ── Sección monto recibido ── */}
@@ -182,7 +437,7 @@ export function ModalPago({ cuenta, procesando, onConfirmar, onClose }: Props) {
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder={fmtL(total)}
+                placeholder={fmtL(totalFinal)}
                 value={montoRecibido}
                 onChange={(e) => setMontoRecibido(e.target.value)}
                 className={[
@@ -199,12 +454,12 @@ export function ModalPago({ cuenta, procesando, onConfirmar, onClose }: Props) {
             {/* Atajos de billetes */}
             <div className="flex flex-wrap gap-1.5">
               <button
-                onClick={() => setMontoRecibido(String(total))}
+                onClick={() => setMontoRecibido(String(totalFinal))}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors"
               >
                 Cobro exacto
               </button>
-              {BILLETES.filter((b) => b >= total).slice(0, 4).map((b) => (
+              {BILLETES.filter((b) => b >= totalFinal).slice(0, 4).map((b) => (
                 <button
                   key={b}
                   onClick={() => setMontoRecibido(String(b))}
@@ -231,7 +486,7 @@ export function ModalPago({ cuenta, procesando, onConfirmar, onClose }: Props) {
                       </p>
                       {!pagoExacto && (
                         <p className="text-xs text-emerald-500 mt-0.5">
-                          L. {fmtL(montoNum)} − L. {fmtL(total)}
+                          L. {fmtL(montoNum)} − L. {fmtL(totalFinal)}
                         </p>
                       )}
                     </div>
@@ -243,7 +498,7 @@ export function ModalPago({ cuenta, procesando, onConfirmar, onClose }: Props) {
                   <>
                     <p className="text-xs text-red-600 font-medium">Monto insuficiente</p>
                     <p className="text-sm font-bold text-red-600">
-                      Faltan L. {fmtL(total - montoNum)}
+                      Faltan L. {fmtL(totalFinal - montoNum)}
                     </p>
                   </>
                 )}
@@ -278,7 +533,7 @@ export function ModalPago({ cuenta, procesando, onConfirmar, onClose }: Props) {
                 onClick={loadTotal}
                 className="w-full h-9 rounded-lg bg-primary/10 border border-primary/30 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
               >
-                ← Cargar total (L. {fmtL(total)})
+                ← Cargar total (L. {fmtL(totalFinal)})
               </button>
 
               {/* Teclado */}
@@ -350,8 +605,8 @@ export function ModalPago({ cuenta, procesando, onConfirmar, onClose }: Props) {
             Cancelar
           </button>
           <button
-            onClick={() => onConfirmar(metodo)}
-            disabled={procesando}
+            onClick={handleConfirmar}
+            disabled={confirmarDeshabilitado}
             className="flex-[2] rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {procesando ? "Registrando..." : "✓ Registrar Pago"}

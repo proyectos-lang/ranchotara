@@ -1,6 +1,6 @@
 "use client";
 
-import type { CuentaPendiente } from "./CajaMonitor";
+import type { CuentaMesa } from "./CajaMonitor";
 import { fmtLps } from "@/lib/format";
 
 const ESTADO_BADGE: Record<string, string> = {
@@ -18,52 +18,91 @@ const ESTADO_LABEL: Record<string, string> = {
 };
 
 type Props = {
-  cuenta: CuentaPendiente;
+  cuenta: CuentaMesa;
   onClick: () => void;
 };
 
 export function CuentaCard({ cuenta, onClick }: Props) {
-  const mesa = cuenta.mesas?.numero_mesa ?? "—";
+  const esBarra = cuenta.mesaId === null;
+  const titulo = esBarra ? "Barra" : cuenta.numeroMesa ?? "—";
   const estadoBadge = ESTADO_BADGE[cuenta.estado] ?? "bg-muted text-muted-foreground border-border";
   const estadoLabel = ESTADO_LABEL[cuenta.estado] ?? cuenta.estado;
 
-  const horaEntrada = cuenta.fecha_creacion
-    ? new Date(cuenta.fecha_creacion).toLocaleTimeString("es-HN", {
+  const horaEntrada = cuenta.fechaApertura
+    ? new Date(cuenta.fechaApertura).toLocaleTimeString("es-HN", {
         hour: "2-digit",
         minute: "2-digit",
       })
     : null;
 
+  /* Ítems activos aplanados de todos los pedidos de la cuenta */
+  const items = cuenta.pedidos.flatMap((p) =>
+    p.detalles_pedido.filter((d) => d.estado_cocina !== "cancelado")
+  );
+
   return (
     <button
       onClick={onClick}
-      className="group w-full text-left rounded-xl border border-border bg-card shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="group w-full text-left rounded-xl border border-border bg-card shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex flex-col"
     >
-      {/* Cabecera con número de mesa */}
+      {/* Cabecera */}
       <div className="bg-primary/5 border-b border-border px-5 py-4 flex items-center justify-between">
         <div>
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Mesa</p>
-          <p className="text-4xl font-black text-primary leading-none mt-0.5">{mesa}</p>
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+            {esBarra ? "Consumo" : "Mesa"}
+          </p>
+          <p className="text-3xl font-black text-primary leading-none mt-0.5">{titulo}</p>
         </div>
-        <span
-          className={[
-            "text-[11px] font-semibold px-2.5 py-1 rounded-full border",
-            estadoBadge,
-          ].join(" ")}
-        >
-          {estadoLabel}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span
+            className={[
+              "text-[11px] font-semibold px-2.5 py-1 rounded-full border",
+              estadoBadge,
+            ].join(" ")}
+          >
+            {estadoLabel}
+          </span>
+          {cuenta.pedidos.length > 1 && (
+            <span className="text-[10px] text-muted-foreground">
+              {cuenta.pedidos.length} pedidos
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Detalle de ítems */}
+      <div className="px-5 py-3 flex-1">
+        {items.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">Sin ítems activos</p>
+        ) : (
+          <ul className="space-y-1 max-h-32 overflow-y-auto">
+            {items.map((d) => (
+              <li key={d.id} className="flex items-baseline justify-between gap-2 text-xs">
+                <span className="text-foreground truncate">
+                  <span className="font-semibold">{d.cantidad}×</span>{" "}
+                  {d.productos?.nombre ?? "—"}
+                  {d.nota && (
+                    <span className="text-amber-600 ml-1" title={d.nota}>📝</span>
+                  )}
+                </span>
+                <span className="text-muted-foreground tabular-nums shrink-0">
+                  {fmtLps(d.subtotal)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Total */}
-      <div className="px-5 py-4">
-        <p className="text-xs text-muted-foreground mb-1">Total a cobrar</p>
-        <p className="text-2xl font-bold text-foreground">
-          {fmtLps(cuenta.total ?? 0)}
-        </p>
+      <div className="px-5 pb-3 pt-2 border-t border-border">
+        <div className="flex items-baseline justify-between">
+          <p className="text-xs text-muted-foreground">Total a cobrar</p>
+          <p className="text-xl font-bold text-foreground">{fmtLps(cuenta.total)}</p>
+        </div>
         {horaEntrada && (
-          <p className="text-[11px] text-muted-foreground mt-2">
-            Pedido abierto: {horaEntrada}
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Cuenta abierta: {horaEntrada}
           </p>
         )}
       </div>
